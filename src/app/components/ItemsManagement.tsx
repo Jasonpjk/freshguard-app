@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { useApp, computeStatus } from "../context/AppContext";
+import { useApp } from "../context/AppContext";
 import type { Item } from "../context/AppContext";
 
 const CATEGORIES = ["유제품", "육류", "채소", "소스", "수산물", "난류", "건식류", "냉동식품", "기타"];

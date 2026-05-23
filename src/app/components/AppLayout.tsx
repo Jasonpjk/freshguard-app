@@ -24,6 +24,7 @@ interface AppLayoutProps {
   children: ReactNode;
   currentPage: string;
   onPageChange?: (page: string) => void;
+  onAddItem?: () => void;
 }
 
 const menuItems = [
@@ -40,7 +41,7 @@ const menuItems = [
   { id: "settings", label: "설정", icon: Settings },
 ];
 
-export function AppLayout({ children, currentPage, onPageChange }: AppLayoutProps) {
+export function AppLayout({ children, currentPage, onPageChange, onAddItem }: AppLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -139,6 +140,7 @@ export function AppLayout({ children, currentPage, onPageChange }: AppLayoutProp
             <Button
               size="sm"
               className="bg-[#10b981] hover:bg-[#059669] text-white shadow-sm border-0 h-8 px-3 text-sm font-medium"
+              onClick={onAddItem}
             >
               <Plus className="w-4 h-4 mr-1.5" strokeWidth={2.5} />
               품목 등록

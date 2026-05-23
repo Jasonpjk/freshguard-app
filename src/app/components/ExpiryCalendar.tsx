@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { useApp } from "../context/AppContext";
+import { useApp, type Item } from "../context/AppContext";
 
 export function ExpiryCalendar() {
   const { items } = useApp();
@@ -187,4 +187,3 @@ export function ExpiryCalendar() {
   );
 }
 
-type Item = import("../context/AppContext").Item;

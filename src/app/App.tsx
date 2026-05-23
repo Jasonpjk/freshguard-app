@@ -6,6 +6,11 @@ import { ExpiryCalendar } from "./components/ExpiryCalendar";
 import { DisposalRecords } from "./components/DisposalRecords";
 import { Reports } from "./components/Reports";
 import { MobileView } from "./components/MobileView";
+import { StorageLocations } from "./components/StorageLocations";
+import { HygieneCheck } from "./components/HygieneCheck";
+import { StaffManagement } from "./components/StaffManagement";
+import { AppSettings } from "./components/AppSettings";
+import { Subscription } from "./components/Subscription";
 import { Button } from "./components/ui/button";
 import { Monitor, Smartphone } from "lucide-react";
 import { AppProvider } from "./context/AppContext";
@@ -16,18 +21,17 @@ export default function App() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case "dashboard":
-        return <Dashboard />;
-      case "items":
-        return <ItemsManagement />;
-      case "calendar":
-        return <ExpiryCalendar />;
-      case "disposal":
-        return <DisposalRecords />;
-      case "report":
-        return <Reports />;
-      default:
-        return <Dashboard />;
+      case "dashboard":   return <Dashboard onNavigate={setCurrentPage} />;
+      case "items":       return <ItemsManagement />;
+      case "calendar":    return <ExpiryCalendar />;
+      case "disposal":    return <DisposalRecords />;
+      case "location":    return <StorageLocations />;
+      case "hygiene":     return <HygieneCheck />;
+      case "staff":       return <StaffManagement />;
+      case "report":      return <Reports />;
+      case "subscription":return <Subscription />;
+      case "settings":    return <AppSettings />;
+      default:            return <Dashboard onNavigate={setCurrentPage} />;
     }
   };
 
@@ -66,7 +70,7 @@ export default function App() {
             모바일 보기
           </Button>
         </div>
-        <AppLayout currentPage={currentPage} onPageChange={setCurrentPage}>
+        <AppLayout currentPage={currentPage} onPageChange={setCurrentPage} onAddItem={() => setCurrentPage("items")}>
           {renderPage()}
         </AppLayout>
       </div>

@@ -82,7 +82,11 @@ function getStatusBadge(status: string, daysLeft: number) {
   );
 }
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const { items, disposalRecords, updateItem, addDisposalRecord } = useApp();
   const [disposalTarget, setDisposalTarget] = useState<Item | null>(null);
 
@@ -148,7 +152,7 @@ export function Dashboard() {
                 <h2 className="text-lg font-semibold text-[#0a0a0a] tracking-tight">오늘 먼저 사용해야 할 품목</h2>
                 <p className="text-sm text-[#71717a] mt-1">소비기한이 임박하거나 만료된 품목입니다</p>
               </div>
-              <Button variant="ghost" size="sm" className="text-[#71717a] hover:text-[#0a0a0a] hover:bg-[#f4f4f5]">
+              <Button variant="ghost" size="sm" className="text-[#71717a] hover:text-[#0a0a0a] hover:bg-[#f4f4f5]" onClick={() => onNavigate?.("items")}>
                 전체 보기
                 <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
