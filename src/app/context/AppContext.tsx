@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
+import { isSupabaseEnabled } from "../lib/supabaseClient";
+import { fetchItems } from "../repositories/itemRepository";
+import { fetchStockLogs } from "../repositories/stockRepository";
+import { fetchDisposalRecords } from "../repositories/disposalRepository";
+import { fetchStorageLocations } from "../repositories/storageLocationRepository";
+import { fetchStaff } from "../repositories/staffRepository";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -247,6 +253,9 @@ interface AppContextValue {
   settings: AppSettings;
   stockLogs: StockLog[];
   today: string;
+  // Data loading
+  loadInitialData: (storeId: string) => Promise<void>;
+  isLoading: boolean;
   // Items
   addItem: (item: Omit<Item, "id" | "status">) => void;
   updateItem: (id: number, updates: Partial<Omit<Item, "id">>) => void;
@@ -296,6 +305,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [stockLogs, setStockLogs] = useState<StockLog[]>(() =>
     load(LS_KEYS.stockLogs, defaultStockLogs)
   );
+  const [isLoading, setIsLoading] = useState(false);
+  const loadedStoreRef = useRef<string | null>(null);
+
+  // ─── loadInitialData ────────────────────────────────────────────────────────
+  // Call this when currentStore changes. In local mode it's a no-op (data
+  // already loaded from localStorage). In supabase mode it fetches from DB.
+  const loadInitialData = useCallback(async (storeId: string) => {
+    if (loadedStoreRef.current === storeId) return;
+    loadedStoreRef.current = storeId;
+
+    if (!isSupabaseEnabled()) return; // local mode: already loaded from localStorage
+
+    setIsLoading(true);
+    try {
+      const [fetchedItems, fetchedLogs, fetchedDisposals, fetchedLocations, fetchedStaff] =
+        await Promise.all([
+          fetchItems(storeId),
+          fetchStockLogs(storeId),
+          fetchDisposalRecords(storeId),
+          fetchStorageLocations(storeId),
+          fetchStaff(storeId),
+        ]);
+
+      // Repository returns [] on error (with console.error), so we only update if non-empty
+      if (fetchedItems.length > 0) setItems(fetchedItems.map((r) => migrateItem(r as unknown as Record<string, unknown>)));
+      if (fetchedLogs.length > 0) setStockLogs(fetchedLogs);
+      if (fetchedDisposals.length > 0) setDisposalRecords(fetchedDisposals);
+      if (fetchedLocations.length > 0) setLocations(fetchedLocations);
+      if (fetchedStaff.length > 0) setStaff(fetchedStaff);
+    } catch (err) {
+      console.error("[AppContext] loadInitialData error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Persist to localStorage on every change
   useEffect(() => { save(LS_KEYS.items, items); }, [items]);
@@ -538,6 +582,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         items, disposalRecords, locations, staff, settings, stockLogs,
         today: new Date().toISOString().split("T")[0],
+        loadInitialData, isLoading,
         addItem, updateItem, deleteItem,
         receiveItem, openItem, markItemUsed, disposeItem, getItemsByStockStatus,
         addDisposalRecord, updateDisposalRecord,

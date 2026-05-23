@@ -18,6 +18,14 @@ import {
   DEMO_STORES,
 } from "../services/authService";
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "../services/storageService";
+import { isSupabaseEnabled, supabase } from "../lib/supabaseClient";
+import {
+  signIn as repoSignIn,
+  signUp as repoSignUp,
+  signOut as repoSignOut,
+  getSupabaseSession,
+  requestPasswordReset as repoRequestPasswordReset,
+} from "../repositories/authRepository";
 
 export type AuthPage = "login" | "signup" | "forgot";
 
@@ -57,28 +65,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ─── Restore session on mount ──────────────────────────────────────────────
   useEffect(() => {
-    const session = loadAuthSession();
-    if (session) {
-      const resolved = resolveUserFromSession(session);
-      if (resolved) {
-        setUser(resolved.user);
-        setOrganization(resolved.org);
-        setStores(resolved.stores);
-        const store =
-          resolved.stores.find((s) => s.id === session.currentStoreId) ?? resolved.stores[0] ?? null;
-        setCurrentStore(store);
-        setIsOnboardingCompleted(session.isOnboardingCompleted);
+    let cancelled = false;
+
+    async function restoreSession() {
+      if (isSupabaseEnabled() && supabase) {
+        // Supabase mode: restore via supabase.auth.getSession
+        const session = await getSupabaseSession();
+        if (!cancelled && session?.user) {
+          // TODO: load profile + org + stores from Supabase tables
+          // const profile = await loadUserProfile(session.user.id);
+          // if (profile) { setUser(profile.user); ... }
+          // For now, fall through to initialized=true and show login
+        }
+        if (!cancelled) setInitialized(true);
+
+        // Listen for Supabase auth state changes (sign-in, sign-out, token refresh)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
+          if (cancelled) return;
+          if (!sbSession) {
+            setUser(null);
+            setOrganization(null);
+            setStores([]);
+            setCurrentStore(null);
+            setIsOnboardingCompleted(false);
+          }
+          // TODO: on SIGNED_IN, load profile and set state
+        });
+        return () => { cancelled = true; subscription.unsubscribe(); };
       } else {
-        // Session refers to an unknown user — clear it
-        clearAuthSession();
+        // Local mode: restore from localStorage session
+        const session = loadAuthSession();
+        if (session) {
+          const resolved = resolveUserFromSession(session);
+          if (resolved) {
+            setUser(resolved.user);
+            setOrganization(resolved.org);
+            setStores(resolved.stores);
+            const store =
+              resolved.stores.find((s) => s.id === session.currentStoreId) ?? resolved.stores[0] ?? null;
+            setCurrentStore(store);
+            setIsOnboardingCompleted(session.isOnboardingCompleted);
+          } else {
+            clearAuthSession();
+          }
+        }
+        if (!cancelled) setInitialized(true);
+        return () => { cancelled = true; };
       }
     }
-    setInitialized(true);
+
+    const cleanup = restoreSession();
+    return () => { cancelled = true; cleanup.then((fn) => fn?.())};
   }, []);
 
   // ─── login ────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+      if (isSupabaseEnabled()) {
+        // Supabase mode
+        const result = await repoSignIn(email, password);
+        if (result.error) return { success: false, error: result.error };
+
+        if (result.user) {
+          const defaultStore = result.stores[0] ?? null;
+          setUser(result.user);
+          setOrganization(result.org);
+          setStores(result.stores);
+          setCurrentStore(defaultStore);
+          setIsOnboardingCompleted(true);
+        }
+        // TODO: handle onboarding flow for Supabase new users
+        return { success: true };
+      }
+
+      // Local mode: existing mock auth
       const result = mockLogin(email, password);
       if (!result) {
         return { success: false, error: "이메일 또는 비밀번호가 올바르지 않습니다." };
@@ -87,10 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user: u, org, stores: storeList } = result;
       const defaultStore = storeList.find((s) => u.storeIds.includes(s.id)) ?? storeList[0] ?? null;
 
-      // Check if onboarding was completed for this user
       const onboardingKey = `fg_onboarding_${u.id}`;
       const onboarded = loadFromStorage<boolean>(onboardingKey, false);
-      // Demo accounts are pre-onboarded
       const isDemo = ["user_demo", "user_manager", "user_staff"].includes(u.id);
 
       setUser(u);
@@ -114,7 +172,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ─── signup ───────────────────────────────────────────────────────────────
   const signup = useCallback(
     async (data: SignupData): Promise<{ success: boolean; error?: string }> => {
-      // Basic validation
       if (!data.email || !data.password || !data.name) {
         return { success: false, error: "모든 필수 항목을 입력해주세요." };
       }
@@ -122,6 +179,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "비밀번호는 6자 이상이어야 합니다." };
       }
 
+      if (isSupabaseEnabled()) {
+        // Supabase mode
+        const result = await repoSignUp(data);
+        if (result.error) return { success: false, error: result.error };
+        // TODO: after Supabase signup, guide user through onboarding
+        return { success: true };
+      }
+
+      // Local mode: existing mock signup
       const { user: u, org, stores: storeList } = mockSignup(data);
       const defaultStore = storeList[0] ?? null;
 
@@ -144,8 +210,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // ─── logout ───────────────────────────────────────────────────────────────
-  const logout = useCallback(() => {
-    clearAuthSession();
+  const logout = useCallback(async () => {
+    if (isSupabaseEnabled()) {
+      await repoSignOut();
+    } else {
+      clearAuthSession();
+    }
     setUser(null);
     setOrganization(null);
     setStores([]);
@@ -156,8 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ─── requestPasswordReset ─────────────────────────────────────────────────
   const requestPasswordReset = useCallback(async (email: string): Promise<boolean> => {
-    // Mock: always succeed if email is non-empty
-    return email.trim().length > 0;
+    if (!email.trim()) return false;
+    if (isSupabaseEnabled()) {
+      const { error } = await repoRequestPasswordReset(email);
+      return !error;
+    }
+    // Local mode: always succeed (mock)
+    return true;
   }, []);
 
   // ─── completeOnboarding ───────────────────────────────────────────────────
