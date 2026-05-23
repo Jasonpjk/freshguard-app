@@ -3,7 +3,13 @@ import { AppLayout } from "./components/AppLayout";
 import { Button } from "./components/ui/button";
 import { Monitor, Smartphone } from "lucide-react";
 import { AppProvider } from "./context/AppContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { LoginPage } from "./pages/LoginPage";
+import { SignupPage } from "./pages/SignupPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
 
+// Lazy-loaded screens
 const Dashboard = lazy(() => import("./components/Dashboard").then((m) => ({ default: m.Dashboard })));
 const ItemsManagement = lazy(() => import("./components/ItemsManagement").then((m) => ({ default: m.ItemsManagement })));
 const ExpiryCalendar = lazy(() => import("./components/ExpiryCalendar").then((m) => ({ default: m.ExpiryCalendar })));
@@ -28,7 +34,35 @@ function PageLoader() {
   );
 }
 
-export default function App() {
+// ─── Auth gate ────────────────────────────────────────────────────────────────
+
+function AuthGate() {
+  const { isAuthenticated, isOnboardingCompleted, authPage } = useAuth();
+
+  if (!isAuthenticated) {
+    if (authPage === "signup") return <SignupPage />;
+    if (authPage === "forgot") return <ForgotPasswordPage />;
+    return <LoginPage />;
+  }
+
+  if (!isOnboardingCompleted) {
+    return (
+      <AppProvider>
+        <OnboardingPage />
+      </AppProvider>
+    );
+  }
+
+  return (
+    <AppProvider>
+      <MainApp />
+    </AppProvider>
+  );
+}
+
+// ─── Main app (authenticated) ─────────────────────────────────────────────────
+
+function MainApp() {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
 
@@ -51,47 +85,57 @@ export default function App() {
 
   if (viewMode === "mobile") {
     return (
-      <AppProvider>
-        <div className="size-full bg-gray-100">
-          <div className="fixed top-4 right-4 z-50">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setViewMode("desktop")}
-              className="gap-2 bg-white shadow-lg"
-            >
-              <Monitor className="w-4 h-4" />
-              데스크톱 보기
-            </Button>
-          </div>
-          <Suspense fallback={<PageLoader />}>
-            <MobileView />
-          </Suspense>
-        </div>
-      </AppProvider>
-    );
-  }
-
-  return (
-    <AppProvider>
-      <div className="size-full relative">
+      <div className="size-full bg-gray-100">
         <div className="fixed top-4 right-4 z-50">
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setViewMode("mobile")}
+            onClick={() => setViewMode("desktop")}
             className="gap-2 bg-white shadow-lg"
           >
-            <Smartphone className="w-4 h-4" />
-            모바일 보기
+            <Monitor className="w-4 h-4" />
+            데스크톱 보기
           </Button>
         </div>
-        <AppLayout currentPage={currentPage} onPageChange={setCurrentPage} onAddItem={() => setCurrentPage("items")}>
-          <Suspense fallback={<PageLoader />}>
-            {renderPage()}
-          </Suspense>
-        </AppLayout>
+        <Suspense fallback={<PageLoader />}>
+          <MobileView />
+        </Suspense>
       </div>
-    </AppProvider>
+    );
+  }
+
+  return (
+    <div className="size-full relative">
+      <div className="fixed top-4 right-4 z-50">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setViewMode("mobile")}
+          className="gap-2 bg-white shadow-lg"
+        >
+          <Smartphone className="w-4 h-4" />
+          모바일 보기
+        </Button>
+      </div>
+      <AppLayout
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+        onAddItem={() => setCurrentPage("items")}
+      >
+        <Suspense fallback={<PageLoader />}>
+          {renderPage()}
+        </Suspense>
+      </AppLayout>
+    </div>
+  );
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

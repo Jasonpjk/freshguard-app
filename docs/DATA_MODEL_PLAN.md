@@ -1,196 +1,245 @@
 # FreshGuard — 백엔드 데이터 모델 계획
 
 > 최종 업데이트: 2026-05-23
-> 현재 상태: 프론트엔드 localStorage 기반 → 추후 REST API + DB 전환 예정
 
-## 핵심 엔티티 (12개)
+---
 
-### 1. Store (매장)
+## 엔티티 관계 다이어그램 (ERD 요약)
+
+```
+Organization (1) ──────── (N) Store
+Organization (1) ──────── (N) User
+User (N) ──────────────── (M) Store  [StoreAssignment 테이블]
+Store (1) ─────────────── (N) Item (StockItem)
+Store (1) ─────────────── (N) StockLog
+Store (1) ─────────────── (N) DisposalRecord
+Store (1) ─────────────── (N) HygieneCheckSession
+HygieneCheckSession (1) ── (N) HygieneCheckItem
+Store (1) ─────────────── (N) StorageLocation
+Organization (1) ──────── (1) Subscription
+```
+
+---
+
+## 핵심 엔티티 상세
+
+### 1. Organization (조직/사업체)
 ```sql
-CREATE TABLE stores (
-  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+CREATE TABLE organizations (
+  id          VARCHAR(36) PRIMARY KEY,
   name        VARCHAR(100) NOT NULL,
-  address     VARCHAR(255),
-  owner_name  VARCHAR(50),
+  type        ENUM('individual','franchise_hq','management_company') DEFAULT 'individual',
+  owner_id    VARCHAR(36) NOT NULL REFERENCES users(id),
   plan        ENUM('free','basic','pro','franchise') DEFAULT 'free',
   created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 2. User (사용자/직원)
+### 2. Store (매장)
+```sql
+CREATE TABLE stores (
+  id               VARCHAR(36) PRIMARY KEY,
+  organization_id  VARCHAR(36) NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,
+  address          VARCHAR(255),
+  type             ENUM('restaurant','cafe','bakery','catering','franchise','other'),
+  is_active        BOOLEAN DEFAULT TRUE,
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 3. User (사용자)
 ```sql
 CREATE TABLE users (
-  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id    BIGINT NOT NULL REFERENCES stores(id),
-  name        VARCHAR(50) NOT NULL,
-  email       VARCHAR(100) UNIQUE,
-  phone       VARCHAR(20),
-  role        ENUM('staff','manager','owner','admin') DEFAULT 'staff',
-  status      ENUM('active','inactive') DEFAULT 'active',
-  last_active DATETIME,
-  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+  id              VARCHAR(36) PRIMARY KEY,
+  email           VARCHAR(100) UNIQUE NOT NULL,
+  password_hash   VARCHAR(255) NOT NULL,
+  name            VARCHAR(50) NOT NULL,
+  role            ENUM('owner','manager','staff','hq_admin') DEFAULT 'staff',
+  organization_id VARCHAR(36) REFERENCES organizations(id),
+  is_active       BOOLEAN DEFAULT TRUE,
+  last_active_at  DATETIME,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 3. Category (카테고리)
+### 4. StoreAssignment (User ↔ Store 다대다)
 ```sql
-CREATE TABLE categories (
-  id       BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id BIGINT REFERENCES stores(id),
-  name     VARCHAR(50) NOT NULL,
-  is_default BOOLEAN DEFAULT FALSE
+CREATE TABLE store_assignments (
+  user_id   VARCHAR(36) REFERENCES users(id),
+  store_id  VARCHAR(36) REFERENCES stores(id),
+  role      ENUM('owner','manager','staff') DEFAULT 'staff',
+  assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, store_id)
 );
 ```
 
-### 4. StorageLocation (보관 위치)
-```sql
-CREATE TABLE storage_locations (
-  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id    BIGINT NOT NULL REFERENCES stores(id),
-  name        VARCHAR(100) NOT NULL,
-  type        ENUM('refrigerator','freezer','dry','bar','other'),
-  temperature DECIMAL(5,1),
-  capacity    INT,
-  notes       TEXT
-);
-```
+### 5. Item / StockItem (품목 마스터 & 재고)
 
-### 5. Item (품목 마스터)
 ```sql
+-- 품목 마스터 (반복 입고되는 품목 정보)
 CREATE TABLE items (
-  id                    BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id              BIGINT NOT NULL REFERENCES stores(id),
-  name                  VARCHAR(100) NOT NULL,
-  category_id           BIGINT REFERENCES categories(id),
-  opened_shelf_life_days INT,       -- 개봉 후 기본 유효일
-  qr_label_enabled      BOOLEAN DEFAULT FALSE,
-  created_at            DATETIME DEFAULT CURRENT_TIMESTAMP
+  id                      VARCHAR(36) PRIMARY KEY,
+  organization_id         VARCHAR(36) REFERENCES organizations(id),
+  store_id                VARCHAR(36) REFERENCES stores(id),
+  name                    VARCHAR(100) NOT NULL,
+  category                VARCHAR(50),
+  default_shelf_life_days INT,
+  qr_label_enabled        BOOLEAN DEFAULT FALSE,
+  created_by              VARCHAR(36) REFERENCES users(id),
+  updated_by              VARCHAR(36) REFERENCES users(id),
+  created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at              DATETIME ON UPDATE CURRENT_TIMESTAMP
 );
-```
 
-### 6. StockItem (재고 단위)
-```sql
+-- 실제 입고된 재고 단위
 CREATE TABLE stock_items (
-  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id         BIGINT NOT NULL REFERENCES stores(id),
-  item_id          BIGINT NOT NULL REFERENCES items(id),
-  location_id      BIGINT REFERENCES storage_locations(id),
-  expiry_date      DATE NOT NULL,
-  received_date    DATE NOT NULL,
-  opened_date      DATE,
-  quantity         DECIMAL(10,2) NOT NULL,
-  unit             VARCHAR(20),
-  cost             DECIMAL(10,2) DEFAULT 0,
-  stock_status     ENUM('unopened','opened','used','disposed') DEFAULT 'unopened',
-  assignee_id      BIGINT REFERENCES users(id),
-  memo             TEXT,
-  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at       DATETIME ON UPDATE CURRENT_TIMESTAMP
+  id                    VARCHAR(36) PRIMARY KEY,
+  store_id              VARCHAR(36) NOT NULL REFERENCES stores(id),
+  organization_id       VARCHAR(36) REFERENCES organizations(id),
+  item_id               VARCHAR(36) REFERENCES items(id),
+  location_id           VARCHAR(36) REFERENCES storage_locations(id),
+  expiry_date           DATE NOT NULL,
+  received_date         DATE NOT NULL,
+  opened_date           DATE,
+  quantity              DECIMAL(10,2) NOT NULL,
+  unit                  VARCHAR(20),
+  cost                  DECIMAL(10,2) DEFAULT 0,
+  stock_status          ENUM('unopened','opened','used','disposed') DEFAULT 'unopened',
+  opened_shelf_life_days INT,
+  assignee_id           VARCHAR(36) REFERENCES users(id),
+  memo                  TEXT,
+  created_by            VARCHAR(36) REFERENCES users(id),
+  updated_by            VARCHAR(36) REFERENCES users(id),
+  created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at            DATETIME ON UPDATE CURRENT_TIMESTAMP
 );
 ```
 
-### 7. StockLog (재고 활동 로그)
+### 6. StockLog (재고 활동 로그)
 ```sql
 CREATE TABLE stock_logs (
-  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id     BIGINT NOT NULL REFERENCES stores(id),
-  stock_item_id BIGINT REFERENCES stock_items(id),
-  item_name    VARCHAR(100),
-  log_type     ENUM('received','opened','used','disposed'),
-  quantity     DECIMAL(10,2),
-  unit         VARCHAR(20),
-  handler_id   BIGINT REFERENCES users(id),
-  memo         TEXT,
-  logged_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+  id              VARCHAR(36) PRIMARY KEY,
+  store_id        VARCHAR(36) NOT NULL REFERENCES stores(id),
+  organization_id VARCHAR(36) REFERENCES organizations(id),
+  stock_item_id   VARCHAR(36) REFERENCES stock_items(id),
+  item_name       VARCHAR(100),
+  log_type        ENUM('received','opened','used','disposed'),
+  quantity        DECIMAL(10,2),
+  unit            VARCHAR(20),
+  handler_id      VARCHAR(36) REFERENCES users(id),
+  memo            TEXT,
+  logged_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 8. DisposalRecord (폐기 기록)
+### 7. DisposalRecord (폐기 기록)
 ```sql
 CREATE TABLE disposal_records (
-  id             BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id       BIGINT NOT NULL REFERENCES stores(id),
-  stock_item_id  BIGINT REFERENCES stock_items(id),
-  item_name      VARCHAR(100),
-  quantity       DECIMAL(10,2),
-  unit           VARCHAR(20),
-  reason         VARCHAR(200),
-  loss           DECIMAL(10,2) DEFAULT 0,
-  handler_id     BIGINT REFERENCES users(id),
-  approver_id    BIGINT REFERENCES users(id),
-  status         ENUM('pending','approved','rejected') DEFAULT 'pending',
-  disposed_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+  id              VARCHAR(36) PRIMARY KEY,
+  store_id        VARCHAR(36) NOT NULL REFERENCES stores(id),
+  organization_id VARCHAR(36) REFERENCES organizations(id),
+  stock_item_id   VARCHAR(36) REFERENCES stock_items(id),
+  item_name       VARCHAR(100),
+  quantity        DECIMAL(10,2),
+  unit            VARCHAR(20),
+  reason          VARCHAR(200),
+  loss            DECIMAL(10,2) DEFAULT 0,
+  handler_id      VARCHAR(36) REFERENCES users(id),
+  approver_id     VARCHAR(36) REFERENCES users(id),
+  status          ENUM('pending','approved','rejected') DEFAULT 'pending',
+  disposed_at     DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 9. HygieneCheckTemplate (위생점검 템플릿)
+### 8. StorageLocation (보관 위치)
+```sql
+CREATE TABLE storage_locations (
+  id              VARCHAR(36) PRIMARY KEY,
+  store_id        VARCHAR(36) NOT NULL REFERENCES stores(id),
+  organization_id VARCHAR(36) REFERENCES organizations(id),
+  name            VARCHAR(100) NOT NULL,
+  type            ENUM('refrigerator','freezer','dry','bar','other'),
+  temperature     DECIMAL(5,1),
+  capacity        INT,
+  notes           TEXT
+);
+```
+
+### 9. HygieneCheckTemplate (위생점검 항목 템플릿)
 ```sql
 CREATE TABLE hygiene_check_templates (
-  id       BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id BIGINT REFERENCES stores(id),
-  category VARCHAR(50),
-  label    VARCHAR(200),
-  required BOOLEAN DEFAULT FALSE,
-  sort_order INT DEFAULT 0
+  id          VARCHAR(36) PRIMARY KEY,
+  store_id    VARCHAR(36) REFERENCES stores(id),  -- NULL = 글로벌 기본값
+  category    VARCHAR(50),
+  label       VARCHAR(200),
+  required    BOOLEAN DEFAULT FALSE,
+  sort_order  INT DEFAULT 0
 );
 ```
 
 ### 10. HygieneCheckSession (위생점검 세션)
 ```sql
 CREATE TABLE hygiene_check_sessions (
-  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id     BIGINT NOT NULL REFERENCES stores(id),
-  checker_id   BIGINT REFERENCES users(id),
-  checked_date DATE NOT NULL,
-  total_count  INT,
-  done_count   INT,
-  status       ENUM('incomplete','complete') DEFAULT 'incomplete',
-  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+  id              VARCHAR(36) PRIMARY KEY,
+  store_id        VARCHAR(36) NOT NULL REFERENCES stores(id),
+  organization_id VARCHAR(36) REFERENCES organizations(id),
+  checker_id      VARCHAR(36) REFERENCES users(id),
+  checked_date    DATE NOT NULL,
+  total_count     INT,
+  done_count      INT,
+  status          ENUM('incomplete','complete') DEFAULT 'incomplete',
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
 ### 11. HygieneCheckItem (위생점검 항목 결과)
 ```sql
 CREATE TABLE hygiene_check_items (
-  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-  session_id  BIGINT NOT NULL REFERENCES hygiene_check_sessions(id),
-  template_id BIGINT REFERENCES hygiene_check_templates(id),
-  checked     BOOLEAN DEFAULT FALSE,
-  memo        TEXT,
-  photo_url   VARCHAR(500)
+  id            VARCHAR(36) PRIMARY KEY,
+  session_id    VARCHAR(36) NOT NULL REFERENCES hygiene_check_sessions(id),
+  template_id   VARCHAR(36) REFERENCES hygiene_check_templates(id),
+  checked       BOOLEAN DEFAULT FALSE,
+  memo          TEXT,
+  photo_url     VARCHAR(500)
 );
 ```
 
 ### 12. Subscription (구독 정보)
 ```sql
 CREATE TABLE subscriptions (
-  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-  store_id    BIGINT NOT NULL REFERENCES stores(id),
-  plan        ENUM('free','basic','pro','franchise') DEFAULT 'free',
-  started_at  DATETIME,
-  next_billing DATE,
-  payment_method VARCHAR(50),
-  status      ENUM('active','cancelled','expired') DEFAULT 'active'
+  id              VARCHAR(36) PRIMARY KEY,
+  organization_id VARCHAR(36) NOT NULL REFERENCES organizations(id),
+  plan            ENUM('free','basic','pro','franchise') DEFAULT 'free',
+  started_at      DATETIME,
+  next_billing    DATE,
+  payment_method  VARCHAR(50),
+  status          ENUM('active','cancelled','expired') DEFAULT 'active'
 );
 ```
 
-## 관계 요약
+---
 
-```
-Store (1) ─── (N) User
-Store (1) ─── (N) Category
-Store (1) ─── (N) StorageLocation
-Store (1) ─── (N) Item ─── (N) StockItem
-StockItem (1) ─── (N) StockLog
-StockItem (1) ─── (1) DisposalRecord
-Store (1) ─── (N) HygieneCheckTemplate
-Store (1) ─── (N) HygieneCheckSession ─── (N) HygieneCheckItem
-Store (1) ─── (1) Subscription
-```
+## 프론트엔드 → 백엔드 데이터 매핑
+
+| 프론트엔드 타입 | 백엔드 테이블 | localStorage 키 |
+|---------------|-------------|-----------------|
+| AuthUser | users | fg_auth (세션만) |
+| Organization | organizations | fg_organizations |
+| AppStore | stores | fg_auth (포함) |
+| Item (AppContext) | stock_items (+ items 마스터) | fg_items |
+| StockLog | stock_logs | fg_stock_logs |
+| DisposalRecord | disposal_records | fg_disposal |
+| StorageLocation | storage_locations | fg_locations |
+| StaffMember | users + store_assignments | fg_staff |
+| AppSettings | stores.settings (JSON) | fg_settings |
+
+---
 
 ## 마이그레이션 전략
 
-1. 현재 localStorage 데이터 → `/api/migrate` 엔드포인트로 일괄 업로드
-2. `items` 배열의 각 Item → `items` 마스터 + `stock_items` 레코드로 분리
-3. `fg_stock_logs` → `stock_logs` 테이블로 직접 매핑
-4. `fg_disposal` → `disposal_records` 테이블로 직접 매핑
+1. `fg_items` localStorage 배열 → `/api/migrate/items` 업로드
+2. `item.storeId` 기본값 `"store_gangnnam"` → 실제 store.id로 교체
+3. `item.organizationId` 기본값 `"org_demo"` → 실제 org.id로 교체
+4. 기존 `fg_staff` → `/api/migrate/staff` 업로드
+5. 기존 `fg_disposal` → `/api/migrate/disposal-records` 업로드

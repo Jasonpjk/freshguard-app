@@ -23,6 +23,11 @@ export interface Item {
   qrLabelEnabled: boolean;
   memo: string;
   cost: number;
+  // SaaS multi-store fields
+  storeId?: string;
+  organizationId?: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface StockLog {
@@ -35,6 +40,9 @@ export interface StockLog {
   unit: string;
   handler: string;
   memo: string;
+  // SaaS multi-store fields
+  storeId?: string;
+  organizationId?: string;
 }
 
 export interface DisposalRecord {
@@ -48,6 +56,9 @@ export interface DisposalRecord {
   handler: string;
   approver: string | null;
   status: "approved" | "pending";
+  // SaaS multi-store fields
+  storeId?: string;
+  organizationId?: string;
 }
 
 export type LocationType = "refrigerator" | "freezer" | "dry" | "bar" | "other";
@@ -219,6 +230,10 @@ function migrateItem(raw: Record<string, unknown>): Item {
     qrLabelEnabled: (raw.qrLabelEnabled as boolean) ?? false,
     memo: (raw.memo as string) ?? "",
     cost: (raw.cost as number) ?? 0,
+    storeId: (raw.storeId as string | undefined) ?? "store_gangnnam",
+    organizationId: (raw.organizationId as string | undefined) ?? "org_demo",
+    createdBy: (raw.createdBy as string | undefined),
+    updatedBy: (raw.updatedBy as string | undefined),
   };
 }
 

@@ -20,6 +20,8 @@ import { useApp, getDaysLeft } from "../context/AppContext";
 import { useMemo, useState } from "react";
 import { DisposalDialog } from "./DisposalDialog";
 import type { Item } from "../context/AppContext";
+import { useAuth } from "../context/AuthContext";
+import { filterItemsByStore } from "../services/itemService";
 
 interface StatCardProps {
   title: string;
@@ -91,9 +93,17 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { items, disposalRecords, updateItem, addDisposalRecord } = useApp();
+  const { items: allItems, disposalRecords: allDisposalRecords, updateItem, addDisposalRecord } = useApp();
+  const { currentStore } = useAuth();
   const [disposalTarget, setDisposalTarget] = useState<Item | null>(null);
   const today = new Date().toISOString().split("T")[0];
+
+  // Filter by current store (legacy items without storeId show in all stores)
+  const items = useMemo(() => filterItemsByStore(allItems, currentStore?.id), [allItems, currentStore]);
+  const disposalRecords = useMemo(
+    () => allDisposalRecords.filter((r) => !r.storeId || r.storeId === currentStore?.id),
+    [allDisposalRecords, currentStore]
+  );
 
   const stats = useMemo(() => {
     const expired = items.filter((i) => i.status === "expired").length;
