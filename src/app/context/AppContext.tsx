@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type ItemStatus = "expired" | "urgent" | "warning" | "normal";
+export type StockStatus = "unopened" | "opened" | "used" | "disposed";
 
 export interface Item {
   id: number;
@@ -12,11 +13,28 @@ export interface Item {
   openedDate: string | null;
   expiryDate: string;
   useAfterOpenDays: number | null;
+  openedShelfLifeDays: number | null;
   location: string;
   quantity: number;
   unit: string;
   status: ItemStatus;
+  stockStatus: StockStatus;
   assignee: string;
+  qrLabelEnabled: boolean;
+  memo: string;
+  cost: number;
+}
+
+export interface StockLog {
+  id: number;
+  date: string;
+  type: "received" | "opened" | "used" | "disposed";
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  handler: string;
+  memo: string;
 }
 
 export interface DisposalRecord {
@@ -94,14 +112,22 @@ export function getDaysLeft(expiryDate: string): number {
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
 const defaultItems: Item[] = [
-  { id: 1, name: "생크림", category: "유제품", receivedDate: "2026-05-20", openedDate: "2026-05-21", expiryDate: "2026-05-23", useAfterOpenDays: 2, location: "냉장고 1번", quantity: 2, unit: "개", status: "expired", assignee: "김조리" },
-  { id: 2, name: "닭가슴살", category: "육류", receivedDate: "2026-05-21", openedDate: null, expiryDate: "2026-05-24", useAfterOpenDays: null, location: "냉장고 2번", quantity: 5, unit: "kg", status: "urgent", assignee: "이주방" },
-  { id: 3, name: "양상추", category: "채소", receivedDate: "2026-05-22", openedDate: null, expiryDate: "2026-05-24", useAfterOpenDays: null, location: "냉장고 1번", quantity: 3, unit: "개", status: "urgent", assignee: "박직원" },
-  { id: 4, name: "토마토소스", category: "소스", receivedDate: "2026-05-15", openedDate: "2026-05-20", expiryDate: "2026-05-25", useAfterOpenDays: 5, location: "건식 창고", quantity: 4, unit: "병", status: "warning", assignee: "김조리" },
-  { id: 5, name: "우유", category: "유제품", receivedDate: "2026-05-20", openedDate: null, expiryDate: "2026-05-26", useAfterOpenDays: null, location: "냉장고 1번", quantity: 10, unit: "팩", status: "warning", assignee: "이주방" },
-  { id: 6, name: "냉동 패티", category: "육류", receivedDate: "2026-05-10", openedDate: null, expiryDate: "2026-06-10", useAfterOpenDays: null, location: "냉동고 A", quantity: 50, unit: "개", status: "normal", assignee: "김조리" },
-  { id: 7, name: "연어 필렛", category: "수산물", receivedDate: "2026-05-22", openedDate: null, expiryDate: "2026-05-27", useAfterOpenDays: null, location: "냉장고 2번", quantity: 2, unit: "kg", status: "normal", assignee: "박직원" },
-  { id: 8, name: "계란", category: "난류", receivedDate: "2026-05-18", openedDate: null, expiryDate: "2026-06-01", useAfterOpenDays: null, location: "냉장고 1번", quantity: 30, unit: "개", status: "normal", assignee: "이주방" },
+  { id: 1, name: "생크림", category: "유제품", receivedDate: "2026-05-20", openedDate: "2026-05-21", expiryDate: "2026-05-23", useAfterOpenDays: 2, openedShelfLifeDays: 2, location: "냉장고 1번", quantity: 2, unit: "개", status: "expired", stockStatus: "opened", assignee: "김조리", qrLabelEnabled: false, memo: "", cost: 3500 },
+  { id: 2, name: "닭가슴살", category: "육류", receivedDate: "2026-05-21", openedDate: null, expiryDate: "2026-05-24", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉장고 2번", quantity: 5, unit: "kg", status: "urgent", stockStatus: "unopened", assignee: "이주방", qrLabelEnabled: false, memo: "", cost: 12000 },
+  { id: 3, name: "양상추", category: "채소", receivedDate: "2026-05-22", openedDate: null, expiryDate: "2026-05-24", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉장고 1번", quantity: 3, unit: "개", status: "urgent", stockStatus: "unopened", assignee: "박직원", qrLabelEnabled: false, memo: "", cost: 2000 },
+  { id: 4, name: "토마토소스", category: "소스", receivedDate: "2026-05-15", openedDate: "2026-05-20", expiryDate: "2026-05-25", useAfterOpenDays: 5, openedShelfLifeDays: 5, location: "건식 창고", quantity: 4, unit: "병", status: "warning", stockStatus: "opened", assignee: "김조리", qrLabelEnabled: false, memo: "", cost: 5000 },
+  { id: 5, name: "우유", category: "유제품", receivedDate: "2026-05-20", openedDate: null, expiryDate: "2026-05-26", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉장고 1번", quantity: 10, unit: "팩", status: "warning", stockStatus: "unopened", assignee: "이주방", qrLabelEnabled: false, memo: "", cost: 1500 },
+  { id: 6, name: "냉동 패티", category: "육류", receivedDate: "2026-05-10", openedDate: null, expiryDate: "2026-06-10", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉동고 A", quantity: 50, unit: "개", status: "normal", stockStatus: "unopened", assignee: "김조리", qrLabelEnabled: true, memo: "월별 정기입고", cost: 800 },
+  { id: 7, name: "연어 필렛", category: "수산물", receivedDate: "2026-05-22", openedDate: null, expiryDate: "2026-05-27", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉장고 2번", quantity: 2, unit: "kg", status: "normal", stockStatus: "unopened", assignee: "박직원", qrLabelEnabled: false, memo: "", cost: 25000 },
+  { id: 8, name: "계란", category: "난류", receivedDate: "2026-05-18", openedDate: null, expiryDate: "2026-06-01", useAfterOpenDays: null, openedShelfLifeDays: null, location: "냉장고 1번", quantity: 30, unit: "개", status: "normal", stockStatus: "unopened", assignee: "이주방", qrLabelEnabled: false, memo: "", cost: 300 },
+];
+
+const defaultStockLogs: StockLog[] = [
+  { id: 1, date: "2026-05-23", type: "received", itemId: 7, itemName: "연어 필렛", quantity: 2, unit: "kg", handler: "박직원", memo: "" },
+  { id: 2, date: "2026-05-22", type: "received", itemId: 3, itemName: "양상추", quantity: 3, unit: "개", handler: "박직원", memo: "" },
+  { id: 3, date: "2026-05-21", type: "opened", itemId: 1, itemName: "생크림", quantity: 2, unit: "개", handler: "김조리", memo: "" },
+  { id: 4, date: "2026-05-20", type: "received", itemId: 1, itemName: "생크림", quantity: 2, unit: "개", handler: "김조리", memo: "" },
+  { id: 5, date: "2026-05-20", type: "opened", itemId: 4, itemName: "토마토소스", quantity: 4, unit: "병", handler: "김조리", memo: "" },
 ];
 
 const defaultDisposalRecords: DisposalRecord[] = [
@@ -153,6 +179,7 @@ const LS_KEYS = {
   locations: "fg_locations",
   staff: "fg_staff",
   settings: "fg_settings",
+  stockLogs: "fg_stock_logs",
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -172,6 +199,29 @@ function save<T>(key: string, value: T) {
   }
 }
 
+function migrateItem(raw: Record<string, unknown>): Item {
+  const openedDate = (raw.openedDate as string | null) ?? null;
+  return {
+    id: raw.id as number,
+    name: (raw.name as string) ?? "",
+    category: (raw.category as string) ?? "",
+    receivedDate: (raw.receivedDate as string) ?? "",
+    openedDate,
+    expiryDate: (raw.expiryDate as string) ?? "",
+    useAfterOpenDays: (raw.useAfterOpenDays as number | null) ?? null,
+    openedShelfLifeDays: (raw.openedShelfLifeDays as number | null) ?? null,
+    location: (raw.location as string) ?? "",
+    quantity: (raw.quantity as number) ?? 0,
+    unit: (raw.unit as string) ?? "",
+    status: computeStatus((raw.expiryDate as string) ?? ""),
+    stockStatus: (raw.stockStatus as StockStatus) ?? (openedDate ? "opened" : "unopened"),
+    assignee: (raw.assignee as string) ?? "",
+    qrLabelEnabled: (raw.qrLabelEnabled as boolean) ?? false,
+    memo: (raw.memo as string) ?? "",
+    cost: (raw.cost as number) ?? 0,
+  };
+}
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AppContextValue {
@@ -180,11 +230,18 @@ interface AppContextValue {
   locations: StorageLocation[];
   staff: StaffMember[];
   settings: AppSettings;
+  stockLogs: StockLog[];
   today: string;
   // Items
   addItem: (item: Omit<Item, "id" | "status">) => void;
   updateItem: (id: number, updates: Partial<Omit<Item, "id">>) => void;
   deleteItem: (id: number) => void;
+  // Stock actions
+  receiveItem: (item: Omit<Item, "id" | "status">) => void;
+  openItem: (id: number, data?: { openedDate?: string; openedShelfLifeDays?: number; memo?: string; handler?: string }) => void;
+  markItemUsed: (id: number) => void;
+  disposeItem: (id: number, data: { reason: string; loss: number; handler: string }) => void;
+  getItemsByStockStatus: (status: StockStatus) => Item[];
   // Disposal
   addDisposalRecord: (record: Omit<DisposalRecord, "id">) => void;
   updateDisposalRecord: (id: number, updates: Partial<Omit<DisposalRecord, "id">>) => void;
@@ -205,12 +262,10 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<Item[]>(() =>
-    load(LS_KEYS.items, defaultItems).map((item) => ({
-      ...item,
-      status: computeStatus(item.expiryDate),
-    }))
-  );
+  const [items, setItems] = useState<Item[]>(() => {
+    const raw = load(LS_KEYS.items, defaultItems) as Record<string, unknown>[];
+    return raw.map(migrateItem);
+  });
   const [disposalRecords, setDisposalRecords] = useState<DisposalRecord[]>(() =>
     load(LS_KEYS.disposalRecords, defaultDisposalRecords)
   );
@@ -223,6 +278,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(() =>
     load(LS_KEYS.settings, defaultSettings)
   );
+  const [stockLogs, setStockLogs] = useState<StockLog[]>(() =>
+    load(LS_KEYS.stockLogs, defaultStockLogs)
+  );
 
   // Persist to localStorage on every change
   useEffect(() => { save(LS_KEYS.items, items); }, [items]);
@@ -230,6 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { save(LS_KEYS.locations, locations); }, [locations]);
   useEffect(() => { save(LS_KEYS.staff, staff); }, [staff]);
   useEffect(() => { save(LS_KEYS.settings, settings); }, [settings]);
+  useEffect(() => { save(LS_KEYS.stockLogs, stockLogs); }, [stockLogs]);
 
   // ─── Items ──────────────────────────────────────────────────────────────────
   const addItem = useCallback((item: Omit<Item, "id" | "status">) => {
@@ -252,6 +311,150 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteItem = useCallback((id: number) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
+
+  // ─── Stock Actions ──────────────────────────────────────────────────────────
+  const receiveItem = useCallback((item: Omit<Item, "id" | "status">) => {
+    const id = Date.now();
+    const newItem: Item = {
+      ...item,
+      id,
+      status: computeStatus(item.expiryDate),
+      stockStatus: "unopened",
+    };
+    setItems((prev) => [...prev, newItem]);
+    setStockLogs((prev) => [
+      {
+        id: Date.now() + 1,
+        date: new Date().toISOString().split("T")[0],
+        type: "received",
+        itemId: id,
+        itemName: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        handler: item.assignee,
+        memo: item.memo ?? "",
+      },
+      ...prev,
+    ]);
+  }, []);
+
+  const openItem = useCallback(
+    (id: number, data?: { openedDate?: string; openedShelfLifeDays?: number; memo?: string; handler?: string }) => {
+      const today = new Date().toISOString().split("T")[0];
+      const openedDate = data?.openedDate ?? today;
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          const lifeDays = data?.openedShelfLifeDays ?? item.openedShelfLifeDays ?? item.useAfterOpenDays;
+          const newExpiryDate = lifeDays
+            ? new Date(new Date(openedDate).getTime() + lifeDays * 86400000).toISOString().split("T")[0]
+            : item.expiryDate;
+          const updated = {
+            ...item,
+            stockStatus: "opened" as StockStatus,
+            openedDate,
+            openedShelfLifeDays: lifeDays,
+            expiryDate: newExpiryDate,
+            memo: data?.memo ?? item.memo,
+          };
+          return { ...updated, status: computeStatus(updated.expiryDate) };
+        })
+      );
+      setItems((prev) => {
+        const found = prev.find((i) => i.id === id);
+        if (found) {
+          setStockLogs((logs) => [
+            {
+              id: Date.now(),
+              date: today,
+              type: "opened",
+              itemId: id,
+              itemName: found.name,
+              quantity: found.quantity,
+              unit: found.unit,
+              handler: data?.handler ?? found.assignee,
+              memo: data?.memo ?? "",
+            },
+            ...logs,
+          ]);
+        }
+        return prev;
+      });
+    },
+    []
+  );
+
+  const markItemUsed = useCallback((id: number) => {
+    const today = new Date().toISOString().split("T")[0];
+    setItems((prev) => {
+      const found = prev.find((i) => i.id === id);
+      if (found) {
+        setStockLogs((logs) => [
+          {
+            id: Date.now(),
+            date: today,
+            type: "used",
+            itemId: id,
+            itemName: found.name,
+            quantity: found.quantity,
+            unit: found.unit,
+            handler: found.assignee,
+            memo: "",
+          },
+          ...logs,
+        ]);
+      }
+      return prev.map((item) =>
+        item.id === id ? { ...item, stockStatus: "used", quantity: 0, status: "normal" } : item
+      );
+    });
+  }, []);
+
+  const disposeItem = useCallback((id: number, data: { reason: string; loss: number; handler: string }) => {
+    const today = new Date().toISOString().split("T")[0];
+    setItems((prev) => {
+      const found = prev.find((i) => i.id === id);
+      if (found) {
+        setDisposalRecords((records) => [
+          {
+            id: Date.now(),
+            date: today,
+            itemName: found.name,
+            quantity: found.quantity,
+            unit: found.unit,
+            reason: data.reason,
+            loss: data.loss,
+            handler: data.handler,
+            approver: null,
+            status: "pending",
+          },
+          ...records,
+        ]);
+        setStockLogs((logs) => [
+          {
+            id: Date.now() + 1,
+            date: today,
+            type: "disposed",
+            itemId: id,
+            itemName: found.name,
+            quantity: found.quantity,
+            unit: found.unit,
+            handler: data.handler,
+            memo: data.reason,
+          },
+          ...logs,
+        ]);
+      }
+      return prev.map((item) =>
+        item.id === id ? { ...item, stockStatus: "disposed", quantity: 0, status: "normal" } : item
+      );
+    });
+  }, []);
+
+  const getItemsByStockStatus = useCallback(
+    (status: StockStatus) => items.filter((i) => i.stockStatus === status),
+    [items]
+  );
 
   // ─── Disposal ───────────────────────────────────────────────────────────────
   const addDisposalRecord = useCallback((record: Omit<DisposalRecord, "id">) => {
@@ -307,19 +510,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ─── Reset ──────────────────────────────────────────────────────────────────
   const resetData = useCallback(() => {
     Object.values(LS_KEYS).forEach((k) => localStorage.removeItem(k));
-    setItems(defaultItems.map((item) => ({ ...item, status: computeStatus(item.expiryDate) })));
+    setItems(defaultItems.map(migrateItem));
     setDisposalRecords(defaultDisposalRecords);
     setLocations(defaultLocations);
     setStaff(defaultStaff);
     setSettings(defaultSettings);
+    setStockLogs(defaultStockLogs);
   }, []);
 
   return (
     <AppContext.Provider
       value={{
-        items, disposalRecords, locations, staff, settings,
+        items, disposalRecords, locations, staff, settings, stockLogs,
         today: new Date().toISOString().split("T")[0],
         addItem, updateItem, deleteItem,
+        receiveItem, openItem, markItemUsed, disposeItem, getItemsByStockStatus,
         addDisposalRecord, updateDisposalRecord,
         addLocation, updateLocation, deleteLocation,
         addStaff, updateStaff, deleteStaff,

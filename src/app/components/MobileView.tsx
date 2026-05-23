@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Trash2,
   Camera,
+  PackagePlus,
+  PackageOpen,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -23,7 +25,7 @@ const hygieneChecklist = [
 ];
 
 export function MobileView() {
-  const { items, updateItem, addDisposalRecord } = useApp();
+  const { items, updateItem, addDisposalRecord, receiveItem, openItem, locations, staff } = useApp();
   const [currentTab, setCurrentTab] = useState("home");
   const [checklist, setChecklist] = useState(() =>
     hygieneChecklist.map((item) => ({ ...item, checked: false }))
@@ -87,6 +89,118 @@ export function MobileView() {
       <main className="flex-1 overflow-y-auto pb-20">
         {currentTab === "home" && (
           <div className="p-4 space-y-4">
+            {/* 빠른 실행 */}
+            <Card className="border-[#e4e4e7] shadow-sm">
+              <CardContent className="p-4">
+                <h2 className="text-sm font-semibold text-[#0a0a0a] mb-3">빠른 실행</h2>
+                <div className="grid grid-cols-5 gap-2">
+                  {[
+                    {
+                      label: "입고 등록",
+                      icon: PackagePlus,
+                      color: "text-[#10b981]",
+                      bg: "bg-[#ecfdf5]",
+                      action: () => {
+                        const today = new Date().toISOString().split("T")[0];
+                        receiveItem({
+                          name: "신규 품목",
+                          category: "기타",
+                          receivedDate: today,
+                          openedDate: null,
+                          expiryDate: "",
+                          useAfterOpenDays: null,
+                          openedShelfLifeDays: null,
+                          location: locations[0]?.name ?? "",
+                          quantity: 1,
+                          unit: "개",
+                          stockStatus: "unopened",
+                          assignee: staff.find((s) => s.status === "active")?.name ?? "",
+                          qrLabelEnabled: false,
+                          memo: "모바일 입고",
+                          cost: 0,
+                        });
+                        alert("입고 등록되었습니다. PC에서 상세 정보를 수정해주세요.");
+                      },
+                    },
+                    {
+                      label: "QR 스캔",
+                      icon: QrCode,
+                      color: "text-[#3b82f6]",
+                      bg: "bg-[#eff6ff]",
+                      action: () => setCurrentTab("scan"),
+                    },
+                    {
+                      label: "개봉 처리",
+                      icon: PackageOpen,
+                      color: "text-[#f97316]",
+                      bg: "bg-[#fff7ed]",
+                      action: () => {
+                        const first = items.find((i) => i.stockStatus === "unopened");
+                        if (first) {
+                          openItem(first.id);
+                          alert(`${first.name} 개봉 처리되었습니다.`);
+                        } else {
+                          alert("개봉할 미개봉 품목이 없습니다.");
+                        }
+                      },
+                    },
+                    {
+                      label: "사용 완료",
+                      icon: CheckCircle2,
+                      color: "text-[#10b981]",
+                      bg: "bg-[#ecfdf5]",
+                      action: () => {
+                        const first = items.find((i) => i.status !== "normal" && i.stockStatus !== "used" && i.stockStatus !== "disposed");
+                        if (first) {
+                          updateItem(first.id, { quantity: 0, status: "normal", stockStatus: "used" });
+                          alert(`${first.name} 사용 완료 처리되었습니다.`);
+                        } else {
+                          alert("처리할 품목이 없습니다.");
+                        }
+                      },
+                    },
+                    {
+                      label: "폐기 등록",
+                      icon: Trash2,
+                      color: "text-[#ef4444]",
+                      bg: "bg-[#fef2f2]",
+                      action: () => {
+                        const first = items.find((i) => i.status === "expired");
+                        if (first) {
+                          addDisposalRecord({
+                            date: new Date().toISOString().split("T")[0],
+                            itemName: first.name,
+                            quantity: first.quantity,
+                            unit: first.unit,
+                            reason: "소비기한 만료",
+                            loss: first.cost * first.quantity,
+                            handler: first.assignee,
+                            approver: null,
+                            status: "pending",
+                          });
+                          updateItem(first.id, { quantity: 0, status: "normal", stockStatus: "disposed" });
+                          alert(`${first.name} 폐기 등록되었습니다.`);
+                        } else {
+                          alert("만료된 품목이 없습니다.");
+                        }
+                      },
+                    },
+                  ].map(({ label, icon: Icon, color, bg, action }) => (
+                    <button
+                      key={label}
+                      onClick={action}
+                      className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-[#e4e4e7] hover:border-[#a1a1aa] transition-colors"
+                    >
+                      <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
+                        <Icon className={`w-4.5 h-4.5 ${color}`} strokeWidth={2} />
+                      </div>
+                      <span className="text-[10px] font-medium text-[#52525b] text-center leading-tight">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-3 gap-3">
               <Card className="border-[#e4e4e7] shadow-sm">
                 <CardContent className="p-4 text-center">

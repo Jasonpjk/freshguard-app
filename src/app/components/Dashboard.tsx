@@ -8,6 +8,10 @@ import {
   ArrowRight,
   CheckCircle2,
   Trash2,
+  PackagePlus,
+  Package,
+  PackageOpen,
+  TrendingUp,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -89,6 +93,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { items, disposalRecords, updateItem, addDisposalRecord } = useApp();
   const [disposalTarget, setDisposalTarget] = useState<Item | null>(null);
+  const today = new Date().toISOString().split("T")[0];
 
   const stats = useMemo(() => {
     const expired = items.filter((i) => i.status === "expired").length;
@@ -103,8 +108,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
     const pendingDisposals = disposalRecords.filter((r) => r.status === "pending").length;
 
-    return { expired, urgent, warning, needAction, monthlyLoss, pendingDisposals };
-  }, [items, disposalRecords]);
+    // Stock stats
+    const todayReceived = items.filter((i) => i.receivedDate === today).length;
+    const unopened = items.filter((i) => i.stockStatus === "unopened").length;
+    const openedNearExpiry = items.filter(
+      (i) => i.stockStatus === "opened" && getDaysLeft(i.expiryDate) <= 1
+    ).length;
+    const todayOpened = items.filter((i) => i.openedDate === today).length;
+
+    return { expired, urgent, warning, needAction, monthlyLoss, pendingDisposals, todayReceived, unopened, openedNearExpiry, todayOpened };
+  }, [items, disposalRecords, today]);
 
   const priorityItems = useMemo(() =>
     items
@@ -129,6 +142,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         <p className="text-sm text-[#71717a]">오늘의 품목 상태를 한눈에 확인하세요</p>
       </div>
 
+      {/* 소비기한 현황 카드 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard title="오늘 처리 필요" value={stats.needAction} icon={AlertTriangle} status="warning" description="만료+임박+주의" />
         <StatCard title="임박 품목" value={stats.urgent} icon={Clock} status="urgent" description="D-1 이내" />
@@ -142,6 +156,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         />
         <StatCard title="주의 품목" value={stats.warning} icon={ClipboardCheck} status="warning" description="D-3 이내" />
         <StatCard title="승인 대기" value={stats.pendingDisposals} icon={Bell} status="urgent" description="폐기 승인 필요" />
+      </div>
+
+      {/* 입고/개봉 현황 카드 */}
+      <div>
+        <h2 className="text-sm font-medium text-[#71717a] mb-3 flex items-center gap-2">
+          <PackagePlus className="w-4 h-4" />
+          오늘 입고/개봉 현황
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="오늘 입고" value={stats.todayReceived} icon={TrendingUp} status="normal" description="오늘 입고된 품목 수" />
+          <StatCard title="미개봉 재고" value={stats.unopened} icon={Package} status="normal" description="개봉 전 보관 중" />
+          <StatCard
+            title="개봉 후 기한 임박"
+            value={stats.openedNearExpiry}
+            icon={PackageOpen}
+            status={stats.openedNearExpiry > 0 ? "urgent" : "normal"}
+            description="개봉 품목 중 D-1 이내"
+          />
+          <StatCard title="오늘 개봉" value={stats.todayOpened} icon={PackageOpen} status="warning" description="오늘 개봉 처리한 품목" />
+        </div>
       </div>
 
       <Card className="border-[#e4e4e7] shadow-sm">
