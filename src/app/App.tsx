@@ -8,6 +8,7 @@ import { Reports } from "./components/Reports";
 import { MobileView } from "./components/MobileView";
 import { Button } from "./components/ui/button";
 import { Monitor, Smartphone } from "lucide-react";
+import { AppProvider } from "./context/AppContext";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
@@ -32,39 +33,43 @@ export default function App() {
 
   if (viewMode === "mobile") {
     return (
-      <div className="size-full bg-gray-100">
-        <div className="fixed top-4 right-4 z-50">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setViewMode("desktop")}
-            className="gap-2 bg-white shadow-lg"
-          >
-            <Monitor className="w-4 h-4" />
-            데스크톱 보기
-          </Button>
+      <AppProvider>
+        <div className="size-full bg-gray-100">
+          <div className="fixed top-4 right-4 z-50">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setViewMode("desktop")}
+              className="gap-2 bg-white shadow-lg"
+            >
+              <Monitor className="w-4 h-4" />
+              데스크톱 보기
+            </Button>
+          </div>
+          <MobileView />
         </div>
-        <MobileView />
-      </div>
+      </AppProvider>
     );
   }
 
   return (
-    <div className="size-full relative">
-      <div className="fixed top-4 right-4 z-50">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setViewMode("mobile")}
-          className="gap-2 bg-white shadow-lg"
-        >
-          <Smartphone className="w-4 h-4" />
-          모바일 보기
-        </Button>
+    <AppProvider>
+      <div className="size-full relative">
+        <div className="fixed top-4 right-4 z-50">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setViewMode("mobile")}
+            className="gap-2 bg-white shadow-lg"
+          >
+            <Smartphone className="w-4 h-4" />
+            모바일 보기
+          </Button>
+        </div>
+        <AppLayout currentPage={currentPage} onPageChange={setCurrentPage}>
+          {renderPage()}
+        </AppLayout>
       </div>
-      <AppLayout currentPage={currentPage} onPageChange={setCurrentPage}>
-        {renderPage()}
-      </AppLayout>
-    </div>
+    </AppProvider>
   );
 }
