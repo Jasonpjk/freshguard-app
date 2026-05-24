@@ -1,4 +1,5 @@
 import { supabase, isSupabaseEnabled } from "../lib/supabaseClient";
+import { isApiEnabled, apiGet, apiPost, apiPatch, apiDelete, ApiError } from "../lib/apiClient";
 import type { StaffMember } from "../context/AppContext";
 import { loadFromStorage, STORAGE_KEYS } from "../services/storageService";
 import {
@@ -15,6 +16,16 @@ export interface StaffQueryParams {
 // ─── Fetch staff ──────────────────────────────────────────────────────────────
 
 export async function fetchStaff({ organizationId: _orgId, storeId }: StaffQueryParams): Promise<StaffMember[]> {
+  if (isApiEnabled()) {
+    try {
+      const data = await apiGet<StaffMember[]>("/api/v1/staff", { storeId });
+      return data;
+    } catch (err) {
+      console.error("[staffRepository] fetchStaff (api) error:", err instanceof ApiError ? err.message : err);
+      return loadFromStorage<StaffMember[]>(STORAGE_KEYS.staff, []);
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase
       .from("store_members")
@@ -32,20 +43,25 @@ export async function fetchStaff({ organizationId: _orgId, storeId }: StaffQuery
   return loadFromStorage<StaffMember[]>(STORAGE_KEYS.staff, []);
 }
 
-// ─── Invite staff (create pending store_member) ───────────────────────────────
-// 실제 이메일 발송 없이 store_members 행 생성으로 처리.
-// 이메일 초대는 향후 Supabase Edge Function (invite-staff) 으로 대체 예정.
+// ─── Invite staff ─────────────────────────────────────────────────────────────
 
 export async function inviteStaff(
   email: string,
   storeId: string,
   role: string
 ): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPost("/api/v1/staff/invite", { email, storeId, role });
+      return true;
+    } catch (err) {
+      console.error("[staffRepository] inviteStaff (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
-    // 1. profiles 테이블에서 해당 이메일 유저 확인
-    //    (auth.users 에 접근 불가이므로 profiles 에 email 컬럼이 있다고 가정하거나 Edge Function 필요)
     // TODO: 실제 이메일 초대는 Edge Function을 통해 구현
-    // await supabase.functions.invoke("invite-staff", { body: { email, storeId, role } });
     console.warn("[staffRepository] inviteStaff: email invite requires Edge Function. storeId:", storeId, "role:", role);
     return false;
   }
@@ -61,10 +77,19 @@ export async function updateStaffMember(
   storeId: string,
   updates: Partial<StaffMember>
 ): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPatch(`/api/v1/staff/${userId}`, { storeId, ...updates });
+      return true;
+    } catch (err) {
+      console.error("[staffRepository] updateStaffMember (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const profileUpdates = mapStaffMemberToSupabaseUpdate(updates);
 
-    // Update store_members role if changed
     if (updates.role !== undefined) {
       const { error: memberError } = await supabase
         .from("store_members")
@@ -78,7 +103,6 @@ export async function updateStaffMember(
       }
     }
 
-    // Update profiles (name, phone, is_active)
     const { name: _name, role: _role, ...profileOnlyUpdates } = profileUpdates;
     if (Object.keys(profileOnlyUpdates).length > 0 || profileUpdates.name !== undefined) {
       const { error: profileError } = await supabase
@@ -101,6 +125,16 @@ export async function updateStaffMember(
 // ─── Remove staff member from store ──────────────────────────────────────────
 
 export async function removeStaffMember(userId: string, storeId: string): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiDelete(`/api/v1/staff/${userId}?storeId=${encodeURIComponent(storeId)}`);
+      return true;
+    } catch (err) {
+      console.error("[staffRepository] removeStaffMember (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { error } = await supabase
       .from("store_members")

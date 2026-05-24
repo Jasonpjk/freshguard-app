@@ -1,3 +1,4 @@
+-- ⚠️ 현재 FreshGuard의 기본 운영 방향은 Vercel + Railway + PostgreSQL입니다. 이 파일은 Supabase 모드 참고용으로 보존됩니다.
 -- FreshGuard Supabase Schema
 -- 실행 순서: 이 파일 전체를 Supabase SQL Editor에서 순서대로 실행하세요.
 -- 의존성 순서: organizations → profiles → stores → store_members → items → ...

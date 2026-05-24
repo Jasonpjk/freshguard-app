@@ -1,5 +1,8 @@
 # FreshGuard — 프론트 함수 ↔ Supabase 매핑
 
+> ⚠️ **현재 FreshGuard의 기본 운영 방향은 Vercel + Railway + PostgreSQL입니다. 이 문서는 Supabase 모드 참고용으로 보존됩니다.**
+> Railway API 매핑은 `API_MAPPING_RAILWAY.md`를 참조하세요.
+
 > 최종 업데이트: 2026-05-24
 
 ---

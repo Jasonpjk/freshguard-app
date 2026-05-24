@@ -1,4 +1,5 @@
 import { supabase, isSupabaseEnabled } from "../lib/supabaseClient";
+import { isApiEnabled, apiGet, apiPost, apiPatch, apiDelete, ApiError } from "../lib/apiClient";
 import type { Item, StockStatus } from "../context/AppContext";
 import { loadFromStorage, STORAGE_KEYS } from "../services/storageService";
 import {
@@ -16,6 +17,16 @@ export interface ItemQueryParams {
 // ─── Fetch items ──────────────────────────────────────────────────────────────
 
 export async function fetchItems({ organizationId: _orgId, storeId }: ItemQueryParams): Promise<Item[]> {
+  if (isApiEnabled()) {
+    try {
+      const data = await apiGet<Item[]>("/api/v1/items", { storeId });
+      return data;
+    } catch (err) {
+      console.error("[itemRepository] fetchItems (api) error:", err instanceof ApiError ? err.message : err);
+      return loadFromStorage<Item[]>(STORAGE_KEYS.items, []);
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase
       .from("items")
@@ -40,6 +51,16 @@ export async function createItem(
   item: Omit<Item, "id" | "status">,
   { organizationId, storeId }: ItemQueryParams
 ): Promise<Item | null> {
+  if (isApiEnabled()) {
+    try {
+      const data = await apiPost<Item>("/api/v1/items", { ...item, storeId, organizationId });
+      return data;
+    } catch (err) {
+      console.error("[itemRepository] createItem (api) error:", err instanceof ApiError ? err.message : err);
+      return null;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const row = mapItemToSupabaseItemInsert(item, organizationId, storeId);
     const { data, error } = await supabase
@@ -63,6 +84,16 @@ export async function createItem(
 // ─── Update item ──────────────────────────────────────────────────────────────
 
 export async function updateItem(id: string, updates: Partial<Omit<Item, "id">>): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPatch(`/api/v1/items/${id}`, updates);
+      return true;
+    } catch (err) {
+      console.error("[itemRepository] updateItem (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const row = mapItemToSupabaseItemUpdate(updates);
     const { error } = await supabase
@@ -84,6 +115,16 @@ export async function updateItem(id: string, updates: Partial<Omit<Item, "id">>)
 // ─── Delete item ──────────────────────────────────────────────────────────────
 
 export async function deleteItem(id: string): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiDelete(`/api/v1/items/${id}`);
+      return true;
+    } catch (err) {
+      console.error("[itemRepository] deleteItem (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { error } = await supabase
       .from("items")
@@ -108,6 +149,16 @@ export async function updateStockStatus(
   status: StockStatus,
   extraFields?: Partial<Omit<Item, "id">>
 ): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPatch(`/api/v1/items/${id}/stock-status`, { stockStatus: status, ...extraFields });
+      return true;
+    } catch (err) {
+      console.error("[itemRepository] updateStockStatus (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const row = {
       stock_status: status,

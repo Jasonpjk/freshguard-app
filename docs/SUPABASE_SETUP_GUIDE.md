@@ -1,6 +1,9 @@
 # FreshGuard — Supabase 설정 가이드
 
-> 최종 업데이트: 2026-05-23
+> ⚠️ **현재 FreshGuard의 기본 운영 방향은 Vercel + Railway + PostgreSQL입니다. Supabase 문서는 대안/참고용으로 보존합니다.**
+> 실제 운영 배포는 `RAILWAY_DEPLOYMENT_GUIDE.md` 및 `VERCEL_DEPLOYMENT_GUIDE.md`를 참조하세요.
+
+> 최종 업데이트: 2026-05-24
 
 ---
 

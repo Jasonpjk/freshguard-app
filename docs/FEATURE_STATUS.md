@@ -1,6 +1,6 @@
 # FreshGuard — 기능 구현 현황
 
-> 최종 업데이트: 2026-05-24
+> 최종 업데이트: 2026-05-24 (Railway api 모드 추가)
 
 ---
 
@@ -97,29 +97,67 @@
 
 ---
 
-## Supabase 백엔드 연동 현황 (2차 완료)
+## Railway API 모드 현황 (3차 완료)
+
+> FreshGuard의 기본 운영 방향: **Vercel + Railway + PostgreSQL (api 모드)**
+
+| 레이어 | 파일 | 상태 | 설명 |
+|--------|------|------|------|
+| API 클라이언트 | lib/apiClient.ts | ✅ 완료 | isApiEnabled(), Bearer 토큰, apiGet/Post/Patch/Delete |
+| 환경변수 | .env.example | ✅ 완료 | VITE_BACKEND_MODE=api, VITE_API_BASE_URL 추가 |
+| 인증 api 모드 | repositories/authRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 품목 api 모드 | repositories/itemRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 재고 api 모드 | repositories/stockRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 폐기 api 모드 | repositories/disposalRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 보관위치 api 모드 | repositories/storageLocationRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 위생점검 api 모드 | repositories/hygieneRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+| 직원 api 모드 | repositories/staffRepository.ts | ✅ 완료 | api/supabase/local 3-way 분기 |
+
+## FastAPI 백엔드 Scaffold 현황
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| backend/app/main.py | ✅ 완료 | FastAPI 앱, CORS, /health, 라우터 등록 |
+| backend/app/core/config.py | ✅ 완료 | DATABASE_URL, JWT_SECRET 등 환경변수 |
+| backend/app/core/security.py | ✅ 완료 | bcrypt 해싱, JWT 발급/검증 |
+| backend/app/db/session.py | ✅ 완료 | DB 미설정 시 앱 기동 가능 |
+| backend/app/models/ | ✅ 완료 | 14개 SQLAlchemy 모델 |
+| backend/app/schemas/ | ✅ 완료 | Pydantic v2 스키마 (camelCase 응답) |
+| backend/app/api/routes/auth.py | ✅ 완료 | signup/login/logout/me/onboarding |
+| backend/app/api/routes/items.py | ✅ 완료 | CRUD + stock-status |
+| backend/app/api/routes/stock.py | ✅ 완료 | 재고 로그 조회/생성 |
+| backend/app/api/routes/disposal.py | ✅ 완료 | 폐기 기록 CRUD |
+| backend/app/api/routes/storage_locations.py | ✅ 완료 | 보관 위치 CRUD |
+| backend/app/api/routes/hygiene.py | ✅ 완료 | 템플릿/세션/체크아이템 |
+| backend/app/api/routes/staff.py | ✅ 완료 | 직원 목록/초대/수정/삭제 |
+| backend/app/api/routes/reports.py | ✅ 완료 | summary/disposal-trends/category-distribution |
+| backend/alembic/ | ✅ 완료 | Alembic 설정, env.py |
+| backend/requirements.txt | ✅ 완료 | FastAPI, SQLAlchemy, Alembic 등 |
+| backend/README.md | ✅ 완료 | 로컬 실행 방법, migration 명령어 |
+
+## Supabase 백엔드 연동 현황 (optional 모드 — 참고용 보존)
 
 | 레이어 | 파일 | 상태 | 설명 |
 |--------|------|------|------|
 | DB 클라이언트 | lib/supabaseClient.ts | ✅ 완료 | isSupabaseEnabled() 헬퍼 |
 | 매핑 함수 | repositories/mappers.ts | ✅ 완료 | 16개 camelCase↔snake_case 변환 |
 | 인증 | repositories/authRepository.ts | ✅ 완료 | 7단계 워크스페이스 생성, 세션 복원 |
-| 품목 | repositories/itemRepository.ts | ✅ 완료 | CRUD, Supabase 실제 쿼리 |
-| 재고 | repositories/stockRepository.ts | ✅ 완료 | 조회/생성 (audit trail) |
-| 폐기 | repositories/disposalRepository.ts | ✅ 완료 | CRUD |
-| 보관위치 | repositories/storageLocationRepository.ts | ✅ 완료 | CRUD |
-| 위생점검 | repositories/hygieneRepository.ts | ✅ 완료 | 템플릿/세션/체크아이템 |
-| 직원 | repositories/staffRepository.ts | ✅ 완료 | 조회/수정/삭제 |
-| 인증 컨텍스트 | context/AuthContext.tsx | ✅ 완료 | 세션 복원, needsOnboarding, onAuthStateChange |
-| 앱 컨텍스트 | context/AppContext.tsx | ✅ 완료 | loadInitialData({organizationId, storeId}) |
-| 앱 진입점 | app/App.tsx | ✅ 완료 | currentStore 변경 시 loadInitialData 호출 |
+| 나머지 repositories | (각 파일) | ✅ 완료 | supabase 분기 유지 |
 
 ## 남은 작업 (다음 스프린트)
 
-- [ ] 스태프 이메일 초대 (Edge Function invite-staff)
-- [ ] 워크스페이스 생성 RPC 단일 트랜잭션 (create_initial_workspace)
+### Railway 실제 연결 및 테스트
+- [ ] Railway PostgreSQL 프로비저닝
+- [ ] `alembic upgrade head` 실행
+- [ ] GET /health 확인
+- [ ] 회원가입 → DB 저장 확인
+- [ ] 품목 CRUD API 테스트
+
+### 기능 추가
+- [ ] 스태프 이메일 초대 (AWS SES 또는 SendGrid)
 - [ ] 다매장 통합 대시보드 (hq_admin 전용)
 - [ ] 실시간 알림 (WebSocket 또는 FCM)
-- [ ] 위생점검 사진 첨부 (Supabase Storage)
+- [ ] 위생점검 사진 첨부 (S3 또는 Railway Volume)
 - [ ] 결제/구독 연동 (Stripe 또는 토스페이먼츠)
 - [ ] 카카오톡 알림 연동
+- [ ] 비밀번호 재설정 이메일 발송 (현재 stub)

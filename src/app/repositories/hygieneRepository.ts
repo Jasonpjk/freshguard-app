@@ -1,4 +1,5 @@
 import { supabase, isSupabaseEnabled } from "../lib/supabaseClient";
+import { isApiEnabled, apiGet, apiPost, apiPatch, ApiError } from "../lib/apiClient";
 import {
   mapSupabaseHygieneTemplateToHygieneTemplate,
   mapSupabaseHygieneSessionToHygieneSession,
@@ -48,6 +49,18 @@ export interface HygieneQueryParams {
 // ─── Fetch hygiene templates ──────────────────────────────────────────────────
 
 export async function fetchTemplates({ storeId }: HygieneQueryParams): Promise<HygieneTemplate[]> {
+  if (isApiEnabled()) {
+    try {
+      const params: Record<string, string> = {};
+      if (storeId) params.storeId = storeId;
+      const data = await apiGet<HygieneTemplate[]>("/api/v1/hygiene/templates", params);
+      return data;
+    } catch (err) {
+      console.error("[hygieneRepository] fetchTemplates (api) error:", err instanceof ApiError ? err.message : err);
+      return [];
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     let query = supabase
       .from("hygiene_check_templates")
@@ -56,7 +69,6 @@ export async function fetchTemplates({ storeId }: HygieneQueryParams): Promise<H
       .order("sort_order");
 
     if (storeId) {
-      // global templates (store_id IS NULL) OR this store's templates
       query = query.or(`store_id.eq.${storeId},store_id.is.null`);
     } else {
       query = query.is("store_id", null);
@@ -80,6 +92,16 @@ export async function fetchTemplates({ storeId }: HygieneQueryParams): Promise<H
 
 export async function fetchSessions({ storeId, organizationId: _orgId }: HygieneQueryParams): Promise<HygieneSession[]> {
   if (!storeId) return [];
+
+  if (isApiEnabled()) {
+    try {
+      const data = await apiGet<HygieneSession[]>("/api/v1/hygiene/sessions", { storeId });
+      return data;
+    } catch (err) {
+      console.error("[hygieneRepository] fetchSessions (api) error:", err instanceof ApiError ? err.message : err);
+      return [];
+    }
+  }
 
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase
@@ -106,6 +128,16 @@ export async function createSession(
   session: Omit<HygieneSession, "id" | "createdAt">,
   { organizationId }: { organizationId: string }
 ): Promise<HygieneSession | null> {
+  if (isApiEnabled()) {
+    try {
+      const data = await apiPost<HygieneSession>("/api/v1/hygiene/sessions", { ...session, organizationId });
+      return data;
+    } catch (err) {
+      console.error("[hygieneRepository] createSession (api) error:", err instanceof ApiError ? err.message : err);
+      return null;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const row = mapHygieneSessionToSupabaseInsert(session, organizationId);
     const { data, error } = await supabase
@@ -131,6 +163,16 @@ export async function updateCheckItem(
   id: string,
   updates: Partial<HygieneCheckItem>
 ): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPatch(`/api/v1/hygiene/check-items/${id}`, updates);
+      return true;
+    } catch (err) {
+      console.error("[hygieneRepository] updateCheckItem (api) error:", err instanceof ApiError ? err.message : err);
+      return false;
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const row: Partial<SupabaseHygieneCheckItemRow> = {};
     if (updates.checked !== undefined) row.checked = updates.checked;
@@ -156,6 +198,16 @@ export async function updateCheckItem(
 // ─── Fetch check items for a session ─────────────────────────────────────────
 
 export async function fetchCheckItems(sessionId: string): Promise<HygieneCheckItem[]> {
+  if (isApiEnabled()) {
+    try {
+      const data = await apiGet<HygieneCheckItem[]>(`/api/v1/hygiene/sessions/${sessionId}/items`);
+      return data;
+    } catch (err) {
+      console.error("[hygieneRepository] fetchCheckItems (api) error:", err instanceof ApiError ? err.message : err);
+      return [];
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase
       .from("hygiene_check_items")

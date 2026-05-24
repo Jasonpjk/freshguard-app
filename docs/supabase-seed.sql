@@ -1,3 +1,4 @@
+-- ⚠️ 현재 FreshGuard의 기본 운영 방향은 Vercel + Railway + PostgreSQL입니다. 이 파일은 Supabase 모드 참고용으로 보존됩니다.
 -- ============================================================
 -- FreshGuard 데모 시드 데이터
 -- 주의: RLS가 활성화된 상태에서 실행 시 service_role key 필요

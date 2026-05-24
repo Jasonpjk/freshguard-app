@@ -1,3 +1,4 @@
+-- ⚠️ 현재 FreshGuard의 기본 운영 방향은 Vercel + Railway + PostgreSQL입니다. 이 파일은 Supabase 모드 참고용으로 보존됩니다.
 -- FreshGuard Supabase RLS 정책 (초안)
 -- 이 파일을 supabase-schema.sql 실행 후에 Supabase SQL Editor에서 실행하세요.
 -- 각 정책의 의도는 위 주석으로 설명합니다.
@@ -41,6 +42,11 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- ─── organizations ────────────────────────────────────────────────────────────
 
+-- 회원가입 시 조직 생성 허용 (profile이 아직 없으므로 인증된 사용자면 허용)
+-- 이후 organizations.owner_id UPDATE로 소유권 확정
+CREATE POLICY "organizations: insert by authenticated user" ON organizations
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
 -- 자신이 속한 조직만 조회 가능
 CREATE POLICY "organizations: read own org" ON organizations
   FOR SELECT USING (id = current_org_id());
@@ -76,12 +82,10 @@ CREATE POLICY "profiles: insert own profile" ON profiles
 CREATE POLICY "stores: read org stores" ON stores
   FOR SELECT USING (organization_id = current_org_id());
 
--- owner 또는 hq_admin만 매장 생성 가능
-CREATE POLICY "stores: insert by owner/hq_admin" ON stores
-  FOR INSERT WITH CHECK (
-    organization_id = current_org_id()
-    AND current_user_role() IN ('owner', 'hq_admin')
-  );
+-- 회원가입 시 기본 매장 생성 허용 (profile 생성 전이므로 인증된 사용자면 허용)
+-- 이후 store_members INSERT로 소유권 확정
+CREATE POLICY "stores: insert by authenticated user" ON stores
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- owner 또는 hq_admin만 매장 수정 가능
 CREATE POLICY "stores: update by owner/hq_admin" ON stores
@@ -235,8 +239,14 @@ CREATE POLICY "hygiene_check_items: update via session store access" ON hygiene_
 CREATE POLICY "app_settings: read accessible stores" ON app_settings
   FOR SELECT USING (can_access_store(store_id));
 
--- owner 또는 hq_admin만 설정 변경 가능
-CREATE POLICY "app_settings: write by owner/hq_admin" ON app_settings
+-- 회원가입 직후(store_member 생성 후) 기본 설정 생성 허용
+CREATE POLICY "app_settings: insert by owner on signup" ON app_settings
+  FOR INSERT WITH CHECK (
+    current_user_role() IN ('owner', 'hq_admin')
+  );
+
+-- owner 또는 hq_admin만 설정 조회/수정 가능
+CREATE POLICY "app_settings: read/write by owner/hq_admin" ON app_settings
   FOR ALL USING (
     can_access_store(store_id)
     AND current_user_role() IN ('owner', 'hq_admin')

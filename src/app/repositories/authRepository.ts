@@ -1,4 +1,5 @@
 import { supabase, isSupabaseEnabled } from "../lib/supabaseClient";
+import { isApiEnabled, apiPost, apiGet, setApiToken, ApiError } from "../lib/apiClient";
 import {
   mockLogin,
   mockSignup,
@@ -23,7 +24,7 @@ export interface SignUpResult {
   error: string | null;
 }
 
-// ─── Internal: load profile + org + stores from DB ───────────────────────────
+// ─── Internal: load profile + org + stores from DB (Supabase) ────────────────
 
 async function loadWorkspace(userId: string): Promise<{
   user: AuthUser;
@@ -33,7 +34,6 @@ async function loadWorkspace(userId: string): Promise<{
   if (!supabase) return null;
 
   try {
-    // 1. Load profile + organization in one query
     const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select("*, organizations(*)")
@@ -45,7 +45,6 @@ async function loadWorkspace(userId: string): Promise<{
       return null;
     }
 
-    // 2. Get store_members → stores for this user
     const { data: members, error: membersErr } = await supabase
       .from("store_members")
       .select("store_id, role, stores(*)")
@@ -74,7 +73,7 @@ async function loadWorkspace(userId: string): Promise<{
 
     const authUser: AuthUser = {
       id: profile.id,
-      email: "", // email is in auth.users, not profiles — populated by caller from supabase session
+      email: "",
       name: profile.name ?? "",
       role: profile.role as AuthUser["role"],
       organizationId: profile.organization_id ?? "",
@@ -102,7 +101,39 @@ async function loadWorkspace(userId: string): Promise<{
 
 // ─── signIn ───────────────────────────────────────────────────────────────────
 
+interface ApiLoginResponse {
+  accessToken: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    organizationId: string;
+    storeIds: string[];
+  };
+  org: { id: string; name: string; type: string; ownerId: string; createdAt: string } | null;
+  stores: AppStore[];
+  needsOnboarding?: boolean;
+}
+
 export async function signIn(email: string, password: string): Promise<SignInResult> {
+  if (isApiEnabled()) {
+    try {
+      const res = await apiPost<ApiLoginResponse>("/api/v1/auth/login", { email, password }, { skipAuth: true });
+      setApiToken(res.accessToken);
+      return {
+        user: res.user as AuthUser,
+        org: res.org,
+        stores: res.stores,
+        error: null,
+        needsOnboarding: res.needsOnboarding ?? false,
+      };
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "로그인에 실패했습니다.";
+      return { user: null, org: null, stores: [], error: msg };
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { user: null, org: null, stores: [], error: error.message };
@@ -111,7 +142,6 @@ export async function signIn(email: string, password: string): Promise<SignInRes
     const workspace = await loadWorkspace(data.user.id);
 
     if (!workspace) {
-      // Profile/org not found → needs onboarding
       return {
         user: { id: data.user.id, email, name: email.split("@")[0], role: "owner", organizationId: "", storeIds: [] },
         org: null,
@@ -121,9 +151,7 @@ export async function signIn(email: string, password: string): Promise<SignInRes
       };
     }
 
-    // Inject email from auth session (not stored in profiles)
     workspace.user.email = email;
-
     return { user: workspace.user, org: workspace.org, stores: workspace.stores, error: null };
   }
 
@@ -134,13 +162,32 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 }
 
 // ─── signUp + workspace creation ─────────────────────────────────────────────
-// TODO: 향후 단일 RPC 함수 create_initial_workspace()로 대체 권장.
-// create_initial_workspace(user_id, user_name, org_name, org_type, store_name, business_type)
-// 를 하나의 트랜잭션으로 처리하면 부분 실패 없이 안전하게 생성 가능.
+
+interface ApiSignupResponse {
+  accessToken: string;
+  user: AuthUser;
+  org: Organization;
+  stores: AppStore[];
+}
 
 export async function signUp(data: SignupData): Promise<SignUpResult> {
+  if (isApiEnabled()) {
+    try {
+      const res = await apiPost<ApiSignupResponse>("/api/v1/auth/signup", {
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        orgType: data.orgType,
+      }, { skipAuth: true });
+      setApiToken(res.accessToken);
+      return { user: res.user, org: res.org, stores: res.stores, error: null };
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "회원가입에 실패했습니다.";
+      return { user: null, org: null, stores: [], error: msg };
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
-    // Step 1: Supabase Auth 회원가입
     const { data: authData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -153,7 +200,6 @@ export async function signUp(data: SignupData): Promise<SignUpResult> {
     const userId = authData.user.id;
 
     try {
-      // Step 2: organization 생성
       const { data: orgData, error: orgErr } = await supabase
         .from("organizations")
         .insert({ name: data.name + "의 조직", type: data.orgType, plan: "free" })
@@ -167,7 +213,6 @@ export async function signUp(data: SignupData): Promise<SignUpResult> {
 
       const orgId: string = orgData.id;
 
-      // Step 3: 기본 store 생성
       const { data: storeData, error: storeErr } = await supabase
         .from("stores")
         .insert({ organization_id: orgId, name: "내 매장", type: "restaurant", is_active: true })
@@ -181,7 +226,6 @@ export async function signUp(data: SignupData): Promise<SignUpResult> {
 
       const storeId: string = storeData.id;
 
-      // Step 4: profile 생성
       const { error: profileErr } = await supabase
         .from("profiles")
         .insert({ id: userId, organization_id: orgId, name: data.name, role: "owner", is_active: true });
@@ -191,20 +235,16 @@ export async function signUp(data: SignupData): Promise<SignUpResult> {
         return { user: null, org: null, stores: [], error: "프로필 생성에 실패했습니다." };
       }
 
-      // Step 5: store_member 생성
       const { error: memberErr } = await supabase
         .from("store_members")
         .insert({ user_id: userId, store_id: storeId, role: "owner" });
 
       if (memberErr) {
         console.error("[authRepository] signUp: store_member creation failed", memberErr.message);
-        // Non-fatal: continue
       }
 
-      // Step 6: organizations.owner_id 업데이트
       await supabase.from("organizations").update({ owner_id: userId }).eq("id", orgId);
 
-      // Step 7: app_settings 기본값 생성
       await supabase.from("app_settings").insert({
         organization_id: orgId,
         store_id: storeId,
@@ -256,6 +296,16 @@ export async function signUp(data: SignupData): Promise<SignUpResult> {
 // ─── signOut ──────────────────────────────────────────────────────────────────
 
 export async function signOut(): Promise<void> {
+  if (isApiEnabled()) {
+    try {
+      await apiPost("/api/v1/auth/logout");
+    } catch {
+      // ignore errors on logout
+    }
+    setApiToken(null);
+    return;
+  }
+
   if (isSupabaseEnabled() && supabase) {
     await supabase.auth.signOut();
   }
@@ -272,10 +322,35 @@ export async function getSupabaseSession() {
 
 // ─── loadUserProfile ──────────────────────────────────────────────────────────
 
+interface ApiMeResponse {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  organizationId: string;
+  storeIds: string[];
+  org: Organization | null;
+  stores: AppStore[];
+}
+
 export async function loadUserProfile(
   userId: string,
   email: string
 ): Promise<{ user: AuthUser; org: Organization; stores: AppStore[] } | null> {
+  if (isApiEnabled()) {
+    try {
+      const res = await apiGet<ApiMeResponse>("/api/v1/auth/me");
+      if (!res.org) return null;
+      return {
+        user: { id: res.id, email: res.email, name: res.name, role: res.role as AuthUser["role"], organizationId: res.organizationId, storeIds: res.storeIds },
+        org: res.org,
+        stores: res.stores,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   if (!isSupabaseEnabled() || !supabase) return null;
 
   const workspace = await loadWorkspace(userId);
@@ -288,21 +363,40 @@ export async function loadUserProfile(
 // ─── requestPasswordReset ────────────────────────────────────────────────────
 
 export async function requestPasswordReset(email: string): Promise<{ error: string | null }> {
+  if (isApiEnabled()) {
+    try {
+      await apiPost("/api/v1/auth/password-reset", { email }, { skipAuth: true });
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "요청에 실패했습니다.";
+      return { error: msg };
+    }
+  }
+
   if (isSupabaseEnabled() && supabase) {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     return { error: error?.message ?? null };
   }
+
   return { error: null };
 }
 
 // ─── updateOnboardingWorkspace ────────────────────────────────────────────────
-// 온보딩 완료 후 organization/store 이름 및 타입 업데이트
 
 export async function updateOnboardingWorkspace(
   organizationId: string,
   storeId: string,
   data: { orgName: string; storeName: string; businessType: string }
 ): Promise<boolean> {
+  if (isApiEnabled()) {
+    try {
+      await apiPost("/api/v1/auth/onboarding", { organizationId, storeId, ...data });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   if (!isSupabaseEnabled() || !supabase) return false;
 
   const { error: orgErr } = await supabase
