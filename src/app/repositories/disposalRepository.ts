@@ -1,10 +1,24 @@
 import { supabase, isSupabaseEnabled } from "../lib/supabaseClient";
 import type { DisposalRecord } from "../context/AppContext";
 import { loadFromStorage, STORAGE_KEYS } from "../services/storageService";
+import {
+  mapSupabaseDisposalRecordToDisposalRecord,
+  mapDisposalRecordToSupabaseInsert,
+  mapDisposalRecordToSupabaseUpdate,
+  type SupabaseDisposalRow,
+} from "./mappers";
+
+export interface DisposalQueryParams {
+  organizationId: string;
+  storeId: string;
+}
 
 // ─── Fetch disposal records ───────────────────────────────────────────────────
 
-export async function fetchDisposalRecords(storeId: string): Promise<DisposalRecord[]> {
+export async function fetchDisposalRecords({
+  organizationId: _orgId,
+  storeId,
+}: DisposalQueryParams): Promise<DisposalRecord[]> {
   if (isSupabaseEnabled() && supabase) {
     const { data, error } = await supabase
       .from("disposal_records")
@@ -17,8 +31,7 @@ export async function fetchDisposalRecords(storeId: string): Promise<DisposalRec
       return loadFromStorage<DisposalRecord[]>(STORAGE_KEYS.disposalRecords, []);
     }
 
-    // TODO: map snake_case row to DisposalRecord type
-    return data as unknown as DisposalRecord[];
+    return (data as SupabaseDisposalRow[]).map(mapSupabaseDisposalRecordToDisposalRecord);
   }
 
   return loadFromStorage<DisposalRecord[]>(STORAGE_KEYS.disposalRecords, []);
@@ -26,20 +39,49 @@ export async function fetchDisposalRecords(storeId: string): Promise<DisposalRec
 
 // ─── Create disposal record ───────────────────────────────────────────────────
 
-export async function createDisposalRecord(record: Omit<DisposalRecord, "id">): Promise<DisposalRecord | null> {
+export async function createDisposalRecord(
+  record: Omit<DisposalRecord, "id">,
+  { organizationId, storeId }: DisposalQueryParams
+): Promise<DisposalRecord | null> {
   if (isSupabaseEnabled() && supabase) {
-    // TODO: const { data, error } = await supabase.from("disposal_records").insert(mapRecordToRow(record)).select().single();
-    return null;
+    const row = mapDisposalRecordToSupabaseInsert(record, organizationId, storeId);
+    const { data, error } = await supabase
+      .from("disposal_records")
+      .insert(row)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[disposalRepository] createDisposalRecord error:", error.message);
+      return null;
+    }
+
+    return mapSupabaseDisposalRecordToDisposalRecord(data as SupabaseDisposalRow);
   }
+
   return null;
 }
 
-// ─── Update disposal record (approve/reject) ──────────────────────────────────
+// ─── Update disposal record (approve / reject) ────────────────────────────────
 
-export async function updateDisposalRecord(id: string, updates: Partial<DisposalRecord>): Promise<boolean> {
+export async function updateDisposalRecord(
+  id: string,
+  updates: Partial<DisposalRecord>
+): Promise<boolean> {
   if (isSupabaseEnabled() && supabase) {
-    // TODO: const { error } = await supabase.from("disposal_records").update(mapUpdatesToRow(updates)).eq("id", id);
-    return false;
+    const row = mapDisposalRecordToSupabaseUpdate(updates);
+    const { error } = await supabase
+      .from("disposal_records")
+      .update(row)
+      .eq("id", id);
+
+    if (error) {
+      console.error("[disposalRepository] updateDisposalRecord error:", error.message);
+      return false;
+    }
+
+    return true;
   }
+
   return true;
 }

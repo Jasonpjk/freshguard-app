@@ -1,8 +1,8 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { AppLayout } from "./components/AppLayout";
 import { Button } from "./components/ui/button";
 import { Monitor, Smartphone } from "lucide-react";
-import { AppProvider } from "./context/AppContext";
+import { AppProvider, useApp } from "./context/AppContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
@@ -65,6 +65,14 @@ function AuthGate() {
 function MainApp() {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
+  const { currentStore, organization } = useAuth();
+  const { loadInitialData } = useApp();
+
+  useEffect(() => {
+    if (currentStore?.id) {
+      loadInitialData(currentStore.id, organization?.id ?? "");
+    }
+  }, [currentStore?.id, organization?.id, loadInitialData]);
 
   const renderPage = () => {
     switch (currentPage) {

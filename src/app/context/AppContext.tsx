@@ -254,7 +254,7 @@ interface AppContextValue {
   stockLogs: StockLog[];
   today: string;
   // Data loading
-  loadInitialData: (storeId: string) => Promise<void>;
+  loadInitialData: (storeId: string, organizationId: string) => Promise<void>;
   isLoading: boolean;
   // Items
   addItem: (item: Omit<Item, "id" | "status">) => void;
@@ -311,7 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ─── loadInitialData ────────────────────────────────────────────────────────
   // Call this when currentStore changes. In local mode it's a no-op (data
   // already loaded from localStorage). In supabase mode it fetches from DB.
-  const loadInitialData = useCallback(async (storeId: string) => {
+  const loadInitialData = useCallback(async (storeId: string, organizationId: string) => {
     if (loadedStoreRef.current === storeId) return;
     loadedStoreRef.current = storeId;
 
@@ -319,21 +319,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     try {
+      const params = { organizationId, storeId };
       const [fetchedItems, fetchedLogs, fetchedDisposals, fetchedLocations, fetchedStaff] =
         await Promise.all([
-          fetchItems(storeId),
-          fetchStockLogs(storeId),
-          fetchDisposalRecords(storeId),
-          fetchStorageLocations(storeId),
-          fetchStaff(storeId),
+          fetchItems(params),
+          fetchStockLogs(params),
+          fetchDisposalRecords(params),
+          fetchStorageLocations(params),
+          fetchStaff(params),
         ]);
 
-      // Repository returns [] on error (with console.error), so we only update if non-empty
-      if (fetchedItems.length > 0) setItems(fetchedItems.map((r) => migrateItem(r as unknown as Record<string, unknown>)));
-      if (fetchedLogs.length > 0) setStockLogs(fetchedLogs);
-      if (fetchedDisposals.length > 0) setDisposalRecords(fetchedDisposals);
-      if (fetchedLocations.length > 0) setLocations(fetchedLocations);
-      if (fetchedStaff.length > 0) setStaff(fetchedStaff);
+      setItems(fetchedItems);
+      setStockLogs(fetchedLogs);
+      setDisposalRecords(fetchedDisposals);
+      setLocations(fetchedLocations);
+      setStaff(fetchedStaff);
     } catch (err) {
       console.error("[AppContext] loadInitialData error:", err);
     } finally {

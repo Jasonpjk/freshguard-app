@@ -199,18 +199,41 @@ Vercel 대시보드 → **Project Settings** → **Environment Variables**:
 
 ---
 
-## 9. 현재 구현 상태 (2026-05-23 기준)
+## 9. 현재 구현 상태 (2026-05-24 기준)
 
 | 단계 | 상태 | 설명 |
 |------|------|------|
 | Supabase 패키지 설치 | ✅ 완료 | `@supabase/supabase-js` |
 | supabaseClient.ts | ✅ 완료 | isSupabaseEnabled() 헬퍼 포함 |
-| Repository 계층 | ✅ 완료 | 7개 파일 (TODO 주석 포함) |
-| AuthContext 분기 | ✅ 완료 | local/supabase 모드 분기 |
-| AppContext 분기 | ✅ 완료 | loadInitialData() 추가 |
+| mappers.ts | ✅ 완료 | 16개 camelCase↔snake_case 변환 함수 |
+| authRepository.ts | ✅ 완료 | signIn/signUp/loadUserProfile/온보딩 7단계 워크스페이스 생성 |
+| itemRepository.ts | ✅ 완료 | CRUD 실제 Supabase 연동 |
+| stockRepository.ts | ✅ 완료 | 조회/생성 (audit trail) |
+| disposalRepository.ts | ✅ 완료 | CRUD 실제 Supabase 연동 |
+| storageLocationRepository.ts | ✅ 완료 | CRUD 실제 Supabase 연동 |
+| hygieneRepository.ts | ✅ 완료 | 템플릿/세션/체크아이템 CRUD |
+| staffRepository.ts | ✅ 완료 | 조회/수정/삭제 (초대는 Edge Function 필요) |
+| AuthContext Supabase 연동 | ✅ 완료 | 세션 복원, needsOnboarding 처리 |
+| AppContext loadInitialData | ✅ 완료 | currentStore 변경 시 자동 데이터 로딩 |
 | SQL Schema | ✅ 완료 | 14개 테이블 |
 | RLS Policies | ✅ 완료 | 초안 (30+ 정책) |
-| Supabase 실제 연결 | ⏳ 미완 | Profile/Org 로딩 구현 필요 |
-| camelCase ↔ snake_case 매핑 | ⏳ 미완 | Repository TODO 주석 위치 |
-| Supabase 회원가입 프로필 생성 | ⏳ 미완 | Edge Function 또는 DB Trigger 필요 |
+| 시드 데이터 | ✅ 완료 | docs/supabase-seed.sql |
+| 스태프 이메일 초대 | ⏳ 미완 | Edge Function invite-staff 구현 필요 |
+| 워크스페이스 단일 트랜잭션 | ⏳ 미완 | RPC create_initial_workspace() 권장 |
 | 결제/구독 | ⏳ 미완 | Stripe/PG 연동 예정 |
+
+---
+
+## 10. 로컬 개발 검증 절차
+
+```bash
+# 1. 로컬 모드 확인 (기존 기능 동작 확인)
+VITE_BACKEND_MODE=local npm run dev
+
+# 2. 빌드 성공 확인 (Supabase 미연결 상태에서도 성공해야 함)
+npm run build
+
+# 3. Supabase 모드 전환 후 로그인 테스트
+# .env.local에 실제 Supabase URL/KEY 입력 후:
+VITE_BACKEND_MODE=supabase npm run dev
+```

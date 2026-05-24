@@ -1,6 +1,6 @@
 # FreshGuard — 프론트 함수 ↔ Supabase 매핑
 
-> 최종 업데이트: 2026-05-23
+> 최종 업데이트: 2026-05-24
 
 ---
 
@@ -104,6 +104,27 @@
 | Subscription.tsx 요금제 변경 | Stripe Checkout Session 또는 토스페이먼츠 결제창 |
 | 결제 수단 관리 | Stripe Customer Portal 또는 PG 관리 API |
 | 구독 취소 | Stripe Cancel Subscription 또는 PG 연동 |
+
+---
+
+## 레포지토리 함수 시그니처 (실제 구현)
+
+### authRepository
+| 함수 | 반환 타입 | 설명 |
+|------|-----------|------|
+| `signIn(email, password)` | `SignInResult` | Supabase auth + loadWorkspace, needsOnboarding 플래그 포함 |
+| `signUp(data)` | `SignUpResult` | 7단계 워크스페이스 생성 (org→store→profile→store_member→owner_id→app_settings) |
+| `loadUserProfile(userId, email)` | `workspace \| null` | 세션 복원용, profiles+org+stores 조회 |
+| `requestPasswordReset(email)` | `{ error }` | supabase.auth.resetPasswordForEmail |
+| `updateOnboardingWorkspace(orgId, storeId, data)` | `boolean` | 온보딩 완료 후 org/store 이름 업데이트 |
+
+### itemRepository / stockRepository / disposalRepository / storageLocationRepository
+| 함수 | params 형태 | 비고 |
+|------|------------|------|
+| `fetchXxx({ organizationId, storeId })` | 객체 | 모든 fetch 함수는 object 형태 |
+| `createXxx(data, { organizationId, storeId })` | 객체 | 두 번째 인자로 context 분리 |
+| `updateXxx(id, updates)` | string id | Supabase UUID string |
+| `deleteXxx(id)` | string id | Supabase UUID string |
 
 ---
 

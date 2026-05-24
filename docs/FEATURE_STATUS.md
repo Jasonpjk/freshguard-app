@@ -1,6 +1,6 @@
 # FreshGuard — 기능 구현 현황
 
-> 최종 업데이트: 2026-05-23
+> 최종 업데이트: 2026-05-24
 
 ---
 
@@ -97,12 +97,29 @@
 
 ---
 
+## Supabase 백엔드 연동 현황 (2차 완료)
+
+| 레이어 | 파일 | 상태 | 설명 |
+|--------|------|------|------|
+| DB 클라이언트 | lib/supabaseClient.ts | ✅ 완료 | isSupabaseEnabled() 헬퍼 |
+| 매핑 함수 | repositories/mappers.ts | ✅ 완료 | 16개 camelCase↔snake_case 변환 |
+| 인증 | repositories/authRepository.ts | ✅ 완료 | 7단계 워크스페이스 생성, 세션 복원 |
+| 품목 | repositories/itemRepository.ts | ✅ 완료 | CRUD, Supabase 실제 쿼리 |
+| 재고 | repositories/stockRepository.ts | ✅ 완료 | 조회/생성 (audit trail) |
+| 폐기 | repositories/disposalRepository.ts | ✅ 완료 | CRUD |
+| 보관위치 | repositories/storageLocationRepository.ts | ✅ 완료 | CRUD |
+| 위생점검 | repositories/hygieneRepository.ts | ✅ 완료 | 템플릿/세션/체크아이템 |
+| 직원 | repositories/staffRepository.ts | ✅ 완료 | 조회/수정/삭제 |
+| 인증 컨텍스트 | context/AuthContext.tsx | ✅ 완료 | 세션 복원, needsOnboarding, onAuthStateChange |
+| 앱 컨텍스트 | context/AppContext.tsx | ✅ 완료 | loadInitialData({organizationId, storeId}) |
+| 앱 진입점 | app/App.tsx | ✅ 완료 | currentStore 변경 시 loadInitialData 호출 |
+
 ## 남은 작업 (다음 스프린트)
 
-- [ ] 실제 백엔드 REST API 연동 (storageService → API 교체)
-- [ ] JWT 인증 (현재: localStorage mock)
-- [ ] ItemsManagement, StockManagement storeId 필터 적용
+- [ ] 스태프 이메일 초대 (Edge Function invite-staff)
+- [ ] 워크스페이스 생성 RPC 단일 트랜잭션 (create_initial_workspace)
 - [ ] 다매장 통합 대시보드 (hq_admin 전용)
 - [ ] 실시간 알림 (WebSocket 또는 FCM)
-- [ ] 위생점검 사진 첨부 (S3 업로드)
+- [ ] 위생점검 사진 첨부 (Supabase Storage)
+- [ ] 결제/구독 연동 (Stripe 또는 토스페이먼츠)
 - [ ] 카카오톡 알림 연동

@@ -24,6 +24,7 @@ import {
   signUp as repoSignUp,
   signOut as repoSignOut,
   getSupabaseSession,
+  loadUserProfile,
   requestPasswordReset as repoRequestPasswordReset,
 } from "../repositories/authRepository";
 
@@ -72,15 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Supabase mode: restore via supabase.auth.getSession
         const session = await getSupabaseSession();
         if (!cancelled && session?.user) {
-          // TODO: load profile + org + stores from Supabase tables
-          // const profile = await loadUserProfile(session.user.id);
-          // if (profile) { setUser(profile.user); ... }
-          // For now, fall through to initialized=true and show login
+          const workspace = await loadUserProfile(session.user.id, session.user.email ?? "");
+          if (!cancelled && workspace) {
+            const defaultStore = workspace.stores[0] ?? null;
+            setUser(workspace.user);
+            setOrganization(workspace.org);
+            setStores(workspace.stores);
+            setCurrentStore(defaultStore);
+            setIsOnboardingCompleted(true);
+          }
         }
         if (!cancelled) setInitialized(true);
 
         // Listen for Supabase auth state changes (sign-in, sign-out, token refresh)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sbSession) => {
           if (cancelled) return;
           if (!sbSession) {
             setUser(null);
@@ -88,8 +94,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setStores([]);
             setCurrentStore(null);
             setIsOnboardingCompleted(false);
+          } else if (event === "SIGNED_IN" && sbSession.user) {
+            const workspace = await loadUserProfile(sbSession.user.id, sbSession.user.email ?? "");
+            if (!cancelled && workspace) {
+              const defaultStore = workspace.stores[0] ?? null;
+              setUser(workspace.user);
+              setOrganization(workspace.org);
+              setStores(workspace.stores);
+              setCurrentStore(defaultStore);
+              setIsOnboardingCompleted(true);
+            }
           }
-          // TODO: on SIGNED_IN, load profile and set state
         });
         return () => { cancelled = true; subscription.unsubscribe(); };
       } else {
@@ -132,9 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOrganization(result.org);
           setStores(result.stores);
           setCurrentStore(defaultStore);
-          setIsOnboardingCompleted(true);
+          setIsOnboardingCompleted(!result.needsOnboarding);
         }
-        // TODO: handle onboarding flow for Supabase new users
         return { success: true };
       }
 
@@ -183,7 +197,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Supabase mode
         const result = await repoSignUp(data);
         if (result.error) return { success: false, error: result.error };
-        // TODO: after Supabase signup, guide user through onboarding
+
+        if (result.user) {
+          const defaultStore = result.stores[0] ?? null;
+          setUser(result.user);
+          setOrganization(result.org);
+          setStores(result.stores);
+          setCurrentStore(defaultStore);
+          setIsOnboardingCompleted(false); // always go through onboarding after signup
+        }
         return { success: true };
       }
 
