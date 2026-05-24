@@ -99,6 +99,7 @@ GET http://localhost:8000/health
 | GET  | /api/v1/items | 품목 목록 |
 | POST | /api/v1/items | 품목 생성 |
 | PATCH | /api/v1/items/{id} | 품목 수정 |
+| PATCH | /api/v1/items/{id}/stock-status | 입고/개봉/사용/폐기 상태 변경 |
 | DELETE | /api/v1/items/{id} | 품목 삭제 |
 | GET  | /api/v1/stock-logs | 재고 로그 |
 | POST | /api/v1/stock-logs | 재고 로그 생성 |
@@ -120,6 +121,22 @@ GET http://localhost:8000/health
 | GET  | /api/v1/reports/summary | 리포트 요약 |
 | GET  | /api/v1/reports/disposal-trends | 폐기 추이 |
 | GET  | /api/v1/reports/category-distribution | 카테고리별 분포 |
+
+---
+
+## 로컬 스모크 테스트
+
+`backend/scripts/smoke_api.py`를 사용하면 백엔드 서버 기동 후 주요 API를 자동으로 검증할 수 있습니다.
+
+```bash
+# 서버를 먼저 켜두고
+uvicorn app.main:app --reload --port 8000
+
+# 다른 터미널에서
+python scripts/smoke_api.py
+```
+
+자세한 로컬 통합 테스트 방법은 `../docs/LOCAL_API_TEST_GUIDE.md` 참조.
 
 ---
 
