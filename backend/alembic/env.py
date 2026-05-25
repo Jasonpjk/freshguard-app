@@ -8,7 +8,11 @@ from alembic import context
 config = context.config
 
 # DATABASE_URL을 환경변수에서 읽어 alembic.ini의 %(DATABASE_URL)s를 채움
-config.set_main_option("DATABASE_URL", os.environ.get("DATABASE_URL", ""))
+# Railway는 postgres:// 형식 제공 → postgresql:// 로 자동 변환
+_raw_url = os.environ.get("DATABASE_URL", "")
+if _raw_url.startswith("postgres://"):
+    _raw_url = "postgresql://" + _raw_url[len("postgres://"):]
+config.set_main_option("DATABASE_URL", _raw_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

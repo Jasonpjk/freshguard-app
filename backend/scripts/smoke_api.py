@@ -20,7 +20,7 @@ import urllib.request
 import urllib.error
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
-TEST_EMAIL = f"smoke_{uuid.uuid4().hex[:8]}@test.com"
+TEST_EMAIL = f"smoke_{uuid.uuid4().hex[:8]}@gmail.com"
 TEST_PASSWORD = "Smoke1234!"
 
 _token: str | None = None
@@ -236,7 +236,7 @@ def test_logout():
 # ─── Runner ───────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"\nFreshGuard API Smoke Test — {BASE_URL}\n{'='*50}")
+    print(f"\nFreshGuard API Smoke Test -- {BASE_URL}\n{'='*50}")
 
     test_health()
     test_signup()
@@ -252,7 +252,7 @@ def main():
     test_reports()
     test_logout()
 
-    print(f"\n{'─'*50}")
+    print(f"\n{'-'*50}")
     passed = sum(1 for r in results if r[0] == PASS)
     failed = sum(1 for r in results if r[0] == FAIL)
     skipped = sum(1 for r in results if r[0] == "SKIP")

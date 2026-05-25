@@ -144,14 +144,28 @@
 | 인증 | repositories/authRepository.ts | ✅ 완료 | 7단계 워크스페이스 생성, 세션 복원 |
 | 나머지 repositories | (각 파일) | ✅ 완료 | supabase 분기 유지 |
 
+## Railway 실제 연결 현황 (4차 완료 — 2026-05-25)
+
+| 항목 | 상태 | 결과 |
+|------|------|------|
+| Railway PostgreSQL 프로비저닝 | ✅ 완료 | striking-delight 프로젝트 |
+| DATABASE_PUBLIC_URL 로컬 연결 | ✅ 완료 | yamanote.proxy.rlwy.net |
+| postgres:// → postgresql:// 자동 변환 | ✅ 완료 | config.py get_database_url() |
+| Railway SSL 자동 처리 | ✅ 완료 | session.py connect_args |
+| bcrypt 4.0.1 고정 (passlib 호환) | ✅ 완료 | requirements.txt |
+| Alembic 초기 마이그레이션 생성 | ✅ 완료 | bde2c9bcffe6_initial_schema.py |
+| alembic upgrade head 실행 | ✅ 완료 | 14개 테이블 Railway DB 생성 |
+| GET /health | ✅ 완료 | {"status":"ok"} |
+| smoke_api.py | ✅ 완료 | **20/20 PASS** |
+| local 모드 회귀 빌드 | ✅ 완료 | 빌드 성공 |
+
 ## 남은 작업 (다음 스프린트)
 
-### Railway 실제 연결 및 테스트
-- [ ] Railway PostgreSQL 프로비저닝
-- [ ] `alembic upgrade head` 실행
-- [ ] GET /health 확인
-- [ ] 회원가입 → DB 저장 확인
-- [ ] 품목 CRUD API 테스트
+### Railway 백엔드 서비스 배포
+- [ ] Railway에 FastAPI 서비스 배포 (GitHub 연결)
+- [ ] Railway 서비스 환경변수 설정 (DATABASE_URL, JWT_SECRET 등)
+- [ ] Vercel 프론트엔드 배포
+- [ ] Vercel 환경변수에 VITE_API_BASE_URL=Railway URL 설정
 
 ### 기능 추가
 - [ ] 스태프 이메일 초대 (AWS SES 또는 SendGrid)

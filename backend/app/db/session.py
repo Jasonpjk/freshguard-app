@@ -13,7 +13,17 @@ _SessionLocal = None
 def get_engine():
     global _engine
     if _engine is None and settings.DATABASE_URL:
-        _engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+        url = settings.get_database_url()
+        # Railway PostgreSQL은 SSL이 필요할 수 있음
+        # psycopg2 드라이버에서 connect_args로 sslmode 전달
+        connect_args: dict = {}
+        if "railway.app" in url or "railway.internal" in url:
+            connect_args["sslmode"] = "require"
+        _engine = create_engine(
+            url,
+            pool_pre_ping=True,
+            connect_args=connect_args,
+        )
     return _engine
 
 
